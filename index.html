@@ -79,6 +79,13 @@ button:disabled{opacity:.5;cursor:not-allowed}
 .status{font-size:13.5px;color:var(--muted);min-height:1.5em}
 .status.ok{color:var(--ok)}.status.err{color:var(--warn)}
 progress{width:220px;height:10px;accent-color:var(--accent)}
+.batch{display:none;flex-direction:column;gap:8px;background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:14px}
+.batch.show{display:flex}
+.batch h2{font-family:var(--font-display);font-size:18px;margin:0}
+.batch ol{margin:0;padding-left:22px;display:flex;flex-direction:column;gap:4px;font-size:14px;max-height:260px;overflow:auto}
+.batch li span{color:var(--muted);font-variant-numeric:tabular-nums}
+.batch li.ok span{color:var(--ok)}.batch li.err span{color:var(--warn)}.batch li.now{font-weight:600}
+.batch .hint{margin:0;font-size:13px;color:var(--muted)}
 .result{display:none;flex-direction:column;gap:10px;background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:14px}
 .result.show{display:flex}
 .result h2{font-family:var(--font-display);font-size:18px;margin:0}
@@ -95,10 +102,10 @@ progress{width:220px;height:10px;accent-color:var(--accent)}
 <main>
   <section class="panel" aria-label="Ajustes">
     <div class="drop" id="drop" tabindex="0" role="button" aria-label="Escolher imagem">
-      <strong>Arraste a imagem aqui</strong>
-      ou clique para escolher (PNG, JPG, WebP)
+      <strong>Arraste uma ou várias imagens aqui</strong>
+      ou clique para escolher (PNG, JPG, WebP). Várias imagens = lote com download automático.
       <div class="fname" id="fname">Exemplo carregado: pato de teste</div>
-      <input type="file" id="file" accept="image/*" hidden>
+      <input type="file" id="file" accept="image/*" multiple hidden>
     </div>
 
     <fieldset>
@@ -169,6 +176,11 @@ progress{width:220px;height:10px;accent-color:var(--accent)}
       <button id="detect" aria-pressed="false">Ver detecção</button>
       <button id="export">Exportar MP4</button>
       <progress id="prog" max="1" value="0" hidden></progress>
+    </div>
+    <div class="batch" id="batch">
+      <div class="bar"><h2>Lote</h2><span class="status" id="batchStatus"></span><button id="batchStop">Parar lote</button></div>
+      <ol id="batchList"></ol>
+      <p class="hint" id="batchHint"></p>
     </div>
     <div class="stats" id="stats"></div>
     <div class="status" id="status" role="status"></div>
@@ -281,7 +293,8 @@ async function readWords(canvas, key) {
 const $ = id => document.getElementById(id);
 const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
 const mkCanvas = (w, h) => { const c = document.createElement('canvas'); c.width = w; c.height = h; return c; };
-const nextTick = () => new Promise(r => setTimeout(r, 0));
+const nextTick = (() => { const ch = new MessageChannel(), q = []; ch.port1.onmessage = () => { const r = q.shift(); if (r) r(); };
+  return () => new Promise(r => { q.push(r); ch.port2.postMessage(0); }); })();
 
 /* ================= geometria do quadro ================= */
 function computeLayout(iw, ih, format) {
@@ -1688,8 +1701,9 @@ async function pickCodec(W, H, fps) {
 }
 
 async function exportVideo() {
-  if (!S.anim || S.busy) return;
+  if (!S.anim || (S.busy && !S.inBatch)) return;
   stopPlay(); if (S.detect) toggleDetect(false);
+  if (!S.inBatch) S.cancel = false;
   S.busy = true; setBusy(true);
   const fps = 30, { W, H } = S.L, an = S.anim;
   const frames = Math.ceil(an.total * fps);
@@ -1706,10 +1720,11 @@ async function exportVideo() {
       an.reset();
       for (let f = 0; f < frames; f++) {
         if (encErr) throw encErr;
+        if (S.cancel) throw new Error('cancelado');
         const c = an.render(f / fps);
         const vf = new VideoFrame(c, { timestamp: Math.round(f * 1e6 / fps), duration: Math.round(1e6 / fps) });
         enc.encode(vf, { keyFrame: f % (fps * 2) === 0 }); vf.close();
-        while (enc.encodeQueueSize > 6) await new Promise(r => setTimeout(r, 4));
+        while (enc.encodeQueueSize > 6) await nextTick();
         if (f % 6 === 0) { prog.value = f / frames; vctx.drawImage(c, 0, 0); await nextTick(); }
       }
       await enc.flush(); enc.close();
@@ -1720,15 +1735,18 @@ async function exportVideo() {
       blob = await recordRealtime(fps, prog);
     }
     S.blob = blob;
+    if (S.inBatch) return blob;
     const v = $('outVideo'); if (v.src) URL.revokeObjectURL(v.src); v.src = URL.createObjectURL(blob);
     $('result').classList.add('show');
     setStatus(`Pronto: ${(blob.size / 1048576).toFixed(1)} MB em ${S.ext.toUpperCase()}. Confira abaixo e clique em "Salvar vídeo".`, 'ok');
     drawStill();
   } catch (e) {
     console.error(e);
+    if (S.inBatch) throw e;
     setStatus('Não foi possível gerar o vídeo neste navegador (' + (e && e.message ? e.message : e) + '). Tente no Chrome ou Edge atualizados.', 'err');
   } finally {
-    prog.hidden = true; S.busy = false; setBusy(false);
+    prog.hidden = true;
+    if (!S.inBatch) { S.busy = false; setBusy(false); }
   }
 }
 
@@ -1750,6 +1768,59 @@ function recordRealtime(fps, prog) {
       if (t < an.total) requestAnimationFrame(loop); else setTimeout(() => rec.stop(), 200); };
     requestAnimationFrame(loop);
   });
+}
+
+function videoName(name, ext) {
+  const base = (name || 'desenho').replace(/\.[a-z0-9]+$/i, '').replace(/[^\w\-]+/g, '-').slice(0, 60) || 'desenho';
+  return `${base}-traco-a-traco.${ext}`;
+}
+// salva sem interação quando possível (GitHub Pages / arquivo local); no claude.ai cada arquivo pede confirmação
+async function autoSave(blob, filename) {
+  let dl = null;
+  try { if (window.claude && typeof window.claude.use === 'function') dl = await window.claude.use('downloads'); } catch (e) { dl = null; }
+  if (dl) { await dl.save({ filename, data: blob }); return 'confirmado'; }
+  const a = document.createElement('a'), url = URL.createObjectURL(blob); a.href = url; a.download = filename;
+  document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(url), 60000);
+  return 'baixado';
+}
+
+/* ================= lote ================= */
+async function runBatch(files) {
+  files = files.filter(f => f && f.type.startsWith('image/'));
+  if (!files.length) { setStatus('Nenhuma imagem no que foi enviado. Use PNG, JPG ou WebP.', 'err'); return; }
+  if (S.busy) { setStatus('Espere o vídeo atual terminar.', 'err'); return; }
+  stopPlay(); if (S.detect) toggleDetect(false);
+  $('result').classList.remove('show');
+  const box = $('batch'), list = $('batchList'); box.classList.add('show');
+  list.innerHTML = files.map((f, k) => `<li id="bi${k}">${f.name.replace(/[<&]/g, '')} <span>na fila</span></li>`).join('');
+  $('batchHint').textContent = location.hostname.endsWith('claude.ai') || window.claude
+    ? 'Aqui no claude.ai cada vídeo pede confirmação para salvar. Para baixar tudo sem cliques, use o link do GitHub.'
+    : 'Se o navegador perguntar se pode baixar vários arquivos, clique em Permitir. Deixe esta aba aberta até terminar.';
+  S.inBatch = true; S.cancel = false; S.busy = true; setBusy(true); $('batchStop').disabled = false;
+  const mark = (k, cls, txt) => { const li = $('bi' + k); if (!li) return; li.className = cls; li.querySelector('span').textContent = txt; };
+  let ok = 0;
+  for (let k = 0; k < files.length; k++) {
+    if (S.cancel) { for (let j = k; j < files.length; j++) mark(j, '', 'cancelado'); break; }
+    const f = files[k], t0 = performance.now();
+    $('batchStatus').textContent = `${k + 1} de ${files.length}`;
+    mark(k, 'now', 'analisando…');
+    const url = URL.createObjectURL(f);
+    try {
+      await loadFromSrc(url, f.name); $('fname').textContent = f.name;
+      await rebuild();
+      mark(k, 'now', 'gerando vídeo…');
+      const blob = await exportVideo();
+      if (!blob) throw new Error('vídeo vazio');
+      const how = await autoSave(blob, videoName(f.name, S.ext));
+      ok++; mark(k, 'ok', `${how} · ${(blob.size / 1048576).toFixed(1)} MB · ${Math.round((performance.now() - t0) / 1000)} s`);
+    } catch (e) {
+      mark(k, 'err', S.cancel ? 'cancelado' : (e && e.code === 'declined' ? 'download recusado' : 'erro: ' + (e && e.message ? e.message : e)));
+    } finally { URL.revokeObjectURL(url); }
+  }
+  S.inBatch = false; S.busy = false; setBusy(false); $('batchStop').disabled = true;
+  $('batchStatus').textContent = `${ok} de ${files.length} vídeo${files.length > 1 ? 's' : ''} pronto${ok === 1 ? '' : 's'}`;
+  setStatus(S.cancel ? 'Lote interrompido.' : 'Lote concluído.', S.cancel ? 'err' : 'ok');
+  drawStill();
 }
 
 async function saveVideo() {
@@ -1792,15 +1863,17 @@ async function handleFile(f) {
   try { await loadFromSrc(url, f.name); $('fname').textContent = f.name; $('result').classList.remove('show'); await rebuild(); play(); }
   catch (e) { setStatus('Não consegui abrir essa imagem. Tente exportá-la de novo como PNG.', 'err'); }
 }
+const pickFiles = list => { const fs = [...(list || [])]; if (fs.length > 1) runBatch(fs); else handleFile(fs[0]); };
 const drop = $('drop'), fileIn = $('file');
 drop.addEventListener('click', () => fileIn.click());
 drop.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); fileIn.click(); } });
-fileIn.addEventListener('change', () => handleFile(fileIn.files[0]));
+fileIn.addEventListener('change', () => { pickFiles(fileIn.files); fileIn.value = ''; });
 ['dragenter', 'dragover'].forEach(ev => drop.addEventListener(ev, e => { e.preventDefault(); drop.classList.add('over'); }));
 ['dragleave', 'drop'].forEach(ev => drop.addEventListener(ev, e => { e.preventDefault(); drop.classList.remove('over'); }));
-drop.addEventListener('drop', e => handleFile(e.dataTransfer.files[0]));
+drop.addEventListener('drop', e => pickFiles(e.dataTransfer.files));
 document.addEventListener('dragover', e => e.preventDefault());
-document.addEventListener('drop', e => { e.preventDefault(); if (e.target !== drop && !drop.contains(e.target)) handleFile(e.dataTransfer.files[0]); });
+document.addEventListener('drop', e => { e.preventDefault(); if (e.target !== drop && !drop.contains(e.target)) pickFiles(e.dataTransfer.files); });
+$('batchStop').addEventListener('click', () => { S.cancel = true; $('batchStop').disabled = true; $('batchStatus').textContent = 'parando…'; });
 
 /* ================= controles ================= */
 const bindOut = (id, fmt) => { const el = $(id), o = $(id + 'O'); const f = () => o.textContent = fmt(el.value); el.addEventListener('input', f); f(); };
