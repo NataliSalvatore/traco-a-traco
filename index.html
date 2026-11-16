@@ -501,6 +501,11 @@ function analyze(src, opt) {
   const dist = distanceTransform(line, w, h);
   const skel = line.slice();
   thin(skel, w, h);
+  // o afinamento (Zhang-Suen) pode apagar por inteiro uma mancha pequena e redonda (pupila, botão, ponto):
+  // toda peça do contorno que ficou sem esqueleto ganha um ponto no seu centro mais grosso
+  { const LS = labelComps(line, w, h), has = new Uint8Array(LS.comps.length), best = new Int32Array(LS.comps.length).fill(-1);
+    for (let i = 0; i < N; i++) { const k = LS.label[i]; if (k < 0) continue; if (skel[i]) has[k] = 1; if (best[k] < 0 || dist[i] > dist[best[k]]) best[k] = i; }
+    for (let k = 0; k < LS.comps.length; k++) if (!has[k] && best[k] >= 0) skel[best[k]] = 1; }
   // objetos (componentes do contorno) e separação de letras/números
   // com leitura de texto ativa, só é texto o que está numa palavra lida (solta); qualquer outra peça marcada como
   // texto pelas regras de formato (ex.: um olho, um botão) volta para o desenho
