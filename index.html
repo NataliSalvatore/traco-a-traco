@@ -502,6 +502,14 @@ function analyze(src, opt) {
   const skel = line.slice();
   thin(skel, w, h);
   // objetos (componentes do contorno) e separação de letras/números
+  // com leitura de texto ativa, só é texto o que está numa palavra lida (solta); qualquer outra peça marcada como
+  // texto pelas regras de formato (ex.: um olho, um botão) volta para o desenho
+  if (opt.ocrWords) {
+    const boxes = (S.freeWords || []).map(wd => { const m = (wd[3] - wd[1]) * 0.4; return [wd[0] - m, wd[1] - m, wd[2] + m, wd[3] + m]; });
+    const TL = labelComps(textPix, w, h);
+    const keep = TL.comps.map(c => { const cx = (c.x0 + c.x1) / 2, cy = (c.y0 + c.y1) / 2; return boxes.some(b => cx >= b[0] && cx <= b[2] && cy >= b[1] && cy <= b[3]); });
+    for (let i = 0; i < N; i++) if (textPix[i] && !keep[TL.label[i]]) textPix[i] = 0;
+  }
   const mDraw = new Uint8Array(N), mText = new Uint8Array(N);
   for (let i = 0; i < N; i++) if (line[i]) { if (textPix[i]) mText[i] = 1; else mDraw[i] = 1; }
   const LD = labelComps(mDraw, w, h), LT = labelComps(mText, w, h);
