@@ -347,39 +347,64 @@ function analyze(src, opt) {
     const edge = Math.max(3, Math.round(Math.min(w, h) * 0.012));   // moldura fina na borda da imagem conta como fundo
     const isBgPx = i => { const y = (i / w) | 0, x = i - y * w; if (x < edge || y < edge || x >= w - edge || y >= h - edge) return true;
       const dr = d[4*i] - bg[0], dg = d[4*i+1] - bg[1], db = d[4*i+2] - bg[2]; return dr*dr + dg*dg + db*db <= tolF; };
-    const isFree = (x0, y0, x1, y1) => {
-      const m = Math.max(4, (y1 - y0) * 0.35), X0 = Math.max(1, Math.round(x0 - m)), Y0 = Math.max(1, Math.round(y0 - m)), X1 = Math.min(w - 2, Math.round(x1 + m)), Y1 = Math.min(h - 2, Math.round(y1 + m));
-      let n = 0, b = 0;
-      const st = Math.max(1, Math.round((X1 - X0 + Y1 - Y0) / 400));
-      for (let x = X0; x <= X1; x += st) { for (const y of [Y0, Y1]) { n++; if (isBgPx(y * w + x)) b++; } }
-      for (let y = Y0; y <= Y1; y += st) { for (const x of [X0, X1]) { n++; if (isBgPx(y * w + x)) b++; } }
-      if (n && b / n >= 0.55) return true;
-      // ou: a palavra está numa etiqueta própria, pequena e solta (ex.: "$400,000" numa tarja vermelha)
-      const lim = (x1 - x0) * (y1 - y0) * 4, seen = new Set(), st2 = [];
-      for (let y = Math.round(y0); y <= Math.round(y1); y += 2) for (let x = Math.round(x0); x <= Math.round(x1); x += 2) { const i = y * w + x; if (i > 0 && i < N && !isBgPx(i)) { seen.add(i); st2.push(i); } }
-      let bx0 = w, by0 = h, bx1 = 0, by1 = 0;
-      while (st2.length) {
-        if (seen.size > lim) return false;
-        const i = st2.pop(), y = (i / w) | 0, x = i - y * w;
-        if (x < bx0) bx0 = x; if (x > bx1) bx1 = x; if (y < by0) by0 = y; if (y > by1) by1 = y;
-        for (const j of [i - 1, i + 1, i - w, i + w]) { const yy = (j / w) | 0, xx = j - yy * w; if (yy < 1 || yy >= h - 1 || xx < 1 || xx >= w - 1 || seen.has(j) || isBgPx(j)) continue; seen.add(j); st2.push(j); }
+    // texto solto = título, legenda por cima do desenho, etiqueta própria; texto da paisagem = escrito dentro de uma
+    // placa/caixa/etiqueta que faz parte do desenho (placa presa na casa, caixa de mudança)
+    const ringBg = (X0, Y0, X1, Y1) => { X0 = Math.max(1, Math.round(X0)); Y0 = Math.max(1, Math.round(Y0)); X1 = Math.min(w - 2, Math.round(X1)); Y1 = Math.min(h - 2, Math.round(Y1));
+      let n = 0, b = 0; const st = Math.max(1, Math.round((X1 - X0 + Y1 - Y0) / 400));
+      for (let x = X0; x <= X1; x += st) for (const y of [Y0, Y1]) { n++; if (isBgPx(y * w + x)) b++; }
+      for (let y = Y0; y <= Y1; y += st) for (const x of [X0, X1]) { n++; if (isBgPx(y * w + x)) b++; }
+      return n ? b / n : 0; };
+    // wd: [x0,y0,x1,y1 (caixa folgada), texto, id, cx0,cy0,cx1,cy1 (miolo)]
+    const isFree = wd => {
+      const [x0, y0, x1, y1] = wd, [k0, k1, k2, k3] = wd.length > 6 ? wd.slice(6, 10) : wd.slice(0, 4);
+      const bh = y1 - y0, ch = k3 - k1;
+      if (ringBg(x0 - bh * 0.35, y0 - bh * 0.35, x1 + bh * 0.35, y1 + bh * 0.35) >= 0.55) { S.fr = 'a'; return true; }   // (a) cercado de fundo
+      // anéis entre o miolo e a caixa folgada: em algum deles há uma cor dominante (placa/caixa/etiqueta)?
+      // Se nenhum tiver, a palavra está por cima de várias partes do desenho (legenda).
+      let best = 0, ring = [], like = null, X0, Y0, X1, Y1;
+      for (const t of [0.5, 0.75, 1.0, 1.25]) {
+        const a0 = k0 + (x0 - k0) * t, a1 = k1 + (y0 - k1) * t, a2 = k2 + (x1 - k2) * t, a3 = k3 + (y1 - k3) * t;
+        const R0 = Math.max(1, Math.round(a0)), S0 = Math.max(1, Math.round(a1)), R1 = Math.min(w - 2, Math.round(a2)), S1 = Math.min(h - 2, Math.round(a3));
+        const rg = [], st = Math.max(1, Math.round((R1 - R0 + S1 - S0) / 400));
+        for (let x = R0; x <= R1; x += st) rg.push(S0 * w + x, S1 * w + x);
+        for (let y = S0; y <= S1; y += st) rg.push(y * w + R0, y * w + R1);
+        const rgc = rg.filter(i => !line[i]); if (rgc.length < rg.length * 0.4) continue;
+        const bins = new Map();
+        for (const i of rgc) { const k = (d[4*i] >> 5) * 64 + (d[4*i+1] >> 5) * 8 + (d[4*i+2] >> 5); bins.set(k, (bins.get(k) || 0) + 1); }
+        let topK = -1, topN = 0; for (const [k, n] of bins) if (n > topN) { topN = n; topK = k; }
+        const sd = rgc.filter(i => ((d[4*i] >> 5) * 64 + (d[4*i+1] >> 5) * 8 + (d[4*i+2] >> 5)) === topK);
+        const ref = [0, 0, 0]; for (const i of sd) { ref[0] += d[4*i]; ref[1] += d[4*i+1]; ref[2] += d[4*i+2]; } ref[0] /= sd.length; ref[1] /= sd.length; ref[2] /= sd.length;
+        const lk = i => { const dr = d[4*i] - ref[0], dg = d[4*i+1] - ref[1], db = d[4*i+2] - ref[2]; return dr*dr + dg*dg + db*db < 50 * 50; };
+        let c = 0; for (const i of rgc) if (lk(i)) c++;
+        if (c / rgc.length > best) { best = c / rgc.length; ring = rgc; like = lk; X0 = R0; Y0 = S0; X1 = R1; Y1 = S1; }
       }
-      // a etiqueta precisa estar cercada de fundo (uma placa na frente da casa não está)
-      const m2 = Math.max(6, (by1 - by0) * 0.3), R0 = Math.max(1, Math.round(bx0 - m2)), S0 = Math.max(1, Math.round(by0 - m2)), R1 = Math.min(w - 2, Math.round(bx1 + m2)), S1 = Math.min(h - 2, Math.round(by1 + m2));
-      let n2 = 0, b2 = 0;
-      for (let x = R0; x <= R1; x += 2) for (const y of [S0, S1]) { n2++; if (isBgPx(y * w + x)) b2++; }
-      for (let y = S0; y <= S1; y += 2) for (const x of [R0, R1]) { n2++; if (isBgPx(y * w + x)) b2++; }
-      return n2 > 0 && b2 / n2 >= 0.6;
+      if (best < 0.65) { S.fr = 'b:' + best.toFixed(2); return true; }    // (b) várias cores: legenda por cima do desenho
+      // (c) o recipiente (placa/caixa/etiqueta da cor dominante)
+      const wa = (k2 - k0) * (k3 - k1), lim = Math.max(wa * 10, ch * ch * 80, 3000), seen = new Set(), q = [];
+      for (const i of ring) if (like(i)) { seen.add(i); q.push(i); }
+      for (let y = Math.round(k1); y <= Math.round(k3); y++) for (let x = Math.round(k0); x <= Math.round(k2); x++) seen.add(y * w + x);
+      let cx0 = X0, cy0 = Y0, cx1 = X1, cy1 = Y1;
+      while (q.length) {
+        if (seen.size > lim) { S.fr = 'c-big'; return true; }                 // recipiente enorme (roupa, corpo): legenda por cima
+        const i = q.pop(), y = (i / w) | 0, x = i - y * w;
+        if (x < cx0) cx0 = x; if (x > cx1) cx1 = x; if (y < cy0) cy0 = y; if (y > cy1) cy1 = y;
+        for (const j of [i - 1, i + 1, i - w, i + w]) { const yy = (j / w) | 0, xx = j - yy * w; if (yy < 1 || yy >= h - 1 || xx < 1 || xx >= w - 1 || seen.has(j) || !like(j)) continue; seen.add(j); q.push(j); }
+      }
+      // recipiente pequeno: etiqueta solta (em volta dela, quase só fundo) ou placa no meio da paisagem
+      const m2 = Math.max(8, (cy1 - cy0) * 0.6), fb = ringBg(cx0 - m2, cy0 - m2, cx1 + m2, cy1 + m2);
+      S.fr = (fb >= 0.55 ? 'label:' : 'scene:') + fb.toFixed(2);
+      return fb >= 0.55;
     };
     // fileiras achadas pelas regras que não estão soltas (letreiro dentro do desenho) deixam de ser texto
-    for (const r of t0.rows.slice()) if (!isFree(r[0], r[1], r[2], r[3])) {
+    for (const r of t0.rows.slice()) if (!isFree([r[0], r[1], r[2], r[3]])) {
       c0.forEach((c, k) => { if (t0[k] && c.x0 >= r[0] - 2 && c.x1 <= r[2] + 2 && c.y0 >= r[1] - (r[3] - r[1]) * 0.5 && c.y1 <= r[3] + (r[3] - r[1]) * 0.2) t0[k] = 0; });
       t0.rows.splice(t0.rows.indexOf(r), 1);
     }
     textPix.fill(0);
     for (let i = 0; i < N; i++) if (l0[i] >= 0 && t0[l0[i]]) textPix[i] = 1;
     if (opt.ocrWords && opt.ocrWords.length) {
-      const free = opt.ocrWords.filter(([x0, y0, x1, y1]) => isFree(x0, y0, x1, y1));
+      S.frs = [];
+      const free = opt.ocrWords.filter(wd => { const r = isFree(wd); S.frs.push(wd[4] + '=' + S.fr); return r; });
       // peça de traço que está (quase) toda dentro da caixa da palavra é texto; peça de desenho que só encosta, não
       const big = free.map(([x0, y0, x1, y1]) => { const p = (y1 - y0) * 0.25; return [x0 - p, y0 - p, x1 + p, y1 + p]; });
       const inside = new Float64Array(c0.length);
@@ -476,8 +501,11 @@ function analyze(src, opt) {
   const skelText = new Uint8Array(N), skelDraw = new Uint8Array(N);
   for (const c of textComps) for (const i of c.px) skelText[i] = 1;
   for (const c of drawComps) for (const i of c.px) skelDraw[i] = 1;
-  const objects = opt.order === 'left' ? objectOrder(drawComps, N) : null;
-  const sDraw = traceStrokes(skelDraw, dist, w, h, opt.order, objects ? objects.map(o => o.px) : null);
+  let objects = null, sDraw, partInfo = null;
+  if (opt.order === 'left') {
+    partInfo = humanOrder(line, mText, skelDraw, dist, d, bg, opt.tol, w, h);
+    sDraw = traceStrokes(skelDraw, dist, w, h, 'free', partInfo.groups, partInfo.cls);
+  } else sDraw = traceStrokes(skelDraw, dist, w, h, opt.order, null);
   // palavras numa peça só são fatiadas em "letras" (colunas da largura de uma letra), da esquerda para a direita
   const textGroupsList = [];
   for (const c of readingOrder(textComps)) {
@@ -499,13 +527,20 @@ function analyze(src, opt) {
   const inFreeText = new Uint8Array(N);
   for (const [x0, y0, x1, y1] of (S.freeWords || [])) { const m = (y1 - y0) * 0.1;
     for (let y = Math.max(1, Math.floor(y0 - m)); y <= Math.min(h - 2, Math.ceil(y1 + m)); y++) for (let x = Math.max(1, Math.floor(x0 - m)); x <= Math.min(w - 2, Math.ceil(x1 + m)); x++) inFreeText[y * w + x] = 1; }
+  // miolo fechado das letras soltas (mesmo branco ou cor de fundo): vai para a pintura do texto
+  const letterIn = new Uint8Array(N);
+  { const out = new Uint8Array(N), st = [];
+    for (let i = 0; i < N; i++) if (inFreeText[i] && !line[i]) { const y = (i / w) | 0, x = i - y * w;
+      if (x < 1 || y < 1 || x >= w - 1 || y >= h - 1 || !inFreeText[i - 1] || !inFreeText[i + 1] || !inFreeText[i - w] || !inFreeText[i + w]) { out[i] = 1; st.push(i); } }
+    while (st.length) { const i = st.pop(); for (const j of [i - 1, i + 1, i - w, i + w]) if (j >= 0 && j < N && inFreeText[j] && !line[j] && !out[j]) { out[j] = 1; st.push(j); } }
+    for (let i = 0; i < N; i++) if (inFreeText[i] && !line[i] && !out[i]) letterIn[i] = 1; }
   const tol2 = opt.tol * opt.tol;
   for (let y = 1; y < h - 1; y++) for (let x = 1; x < w - 1; x++) {
     const i = y * w + x;
     if (line[i]) continue;
     const dr = d[4*i] - bg[0], dg = d[4*i+1] - bg[1], db = d[4*i+2] - bg[2];
     const cd = dr*dr + dg*dg + db*db;
-    if (cd > tol2) fill[i] = 1;
+    if (cd > tol2 || letterIn[i]) fill[i] = 1;
     else if (inFreeText[i] && cd > 18 * 18 && lum[i] > bgLum + 5 && !line[i]) lightIn[i] = 1;
   }
   {
@@ -526,10 +561,66 @@ function analyze(src, opt) {
   // só o "branco das letras" (mais claro que o fundo) forma áreas separadas dentro da caixa da palavra;
   // roupa/desenho que entra na caixa continua junto com o resto do desenho
   const zone = new Uint8Array(N);
-  for (let i = 0; i < N; i++) if (inFreeText[i] && lum[i] > bgLum + 5) zone[i] = 1;
+  for (let i = 0; i < N; i++) if (letterIn[i] || (inFreeText[i] && lum[i] > bgLum + 5)) zone[i] = 1;
   const allRegions = buildRegions(fill, lineD, owned, d, w, h, opt.order, opt.doFill, regIsText, zone);
   let drawRegs = allRegions.filter(r => !r.isText), textRegs = allRegions.filter(r => r.isText);
-  if (objects) drawRegs = orderRegionsByObjects(drawRegs, objects);
+  if (partInfo) drawRegs = paintOrder(drawRegs, partInfo, w);
+  // legenda por cima do desenho: o buraco em forma de letra na roupa é preenchido com a cor da própria área
+  // (a letra é escrita por cima no fim); assim a pintura não mostra o fundo vazando pelas letras
+  if (drawRegs.length && (S.freeWords || []).length) {
+    const lab = new Int32Array(N).fill(-1), cols = [];
+    drawRegs.forEach((r, k) => { const a = r.layer.getContext('2d').getImageData(0, 0, r.bw, r.bh).data; let c = [0, 0, 0], n = 0;
+      for (let y = 0; y < r.bh; y++) for (let x = 0; x < r.bw; x++) { const o = 4 * (y * r.bw + x); if (a[o + 3]) { lab[(r.y + y) * w + r.x + x] = k; c[0] += a[o]; c[1] += a[o+1]; c[2] += a[o+2]; n++; } }
+      cols.push(n ? c.map(v => v / n) : [0, 0, 0]); });
+    const hole = new Uint8Array(N), extraText = new Uint8Array(N);
+    // pedaços de letra que "vazaram" para dentro de uma área do desenho (letra com contorno aberto): saem da área
+    // (viram buraco a preencher com a cor da área) e vão para a pintura do texto
+    for (let i = 0; i < N; i++) { const k = lab[i]; if (k < 0 || !inFreeText[i]) continue; const c = cols[k];
+      const dr = d[4*i] - c[0], dg = d[4*i+1] - c[1], db = d[4*i+2] - c[2]; if (dr*dr + dg*dg + db*db > 70 * 70) { lab[i] = -1; extraText[i] = 1; } }
+    // miolo das letras: o que está dentro da caixa da palavra e não se liga ao lado de fora sem cruzar o traço da letra
+    const outside = new Uint8Array(N), st2 = [];
+    for (let i = 0; i < N; i++) if (inFreeText[i] && !line[i] && lab[i] < 0) { const y = (i / w) | 0, x = i - y * w;
+      if (x < 1 || y < 1 || x >= w - 1 || y >= h - 1 || !inFreeText[i - 1] || !inFreeText[i + 1] || !inFreeText[i - w] || !inFreeText[i + w]) { outside[i] = 1; st2.push(i); } }
+    while (st2.length) { const i = st2.pop(); for (const j of [i - 1, i + 1, i - w, i + w]) if (j >= 0 && j < N && inFreeText[j] && !line[j] && lab[j] < 0 && !outside[j]) { outside[j] = 1; st2.push(j); } }
+    for (let i = 0; i < N; i++) if (inFreeText[i] && lab[i] < 0 && (line[i] || !outside[i] || extraText[i])) hole[i] = 1;
+    let front = []; for (let i = 0; i < N; i++) if (lab[i] >= 0 && inFreeText[i]) front.push(i);
+    const maxSteps = Math.max(...(S.freeWords || []).map(wd => (wd[3] - wd[1]) * 0.6));
+    const add = drawRegs.map(() => []);
+    for (let st = 0; st < maxSteps && front.length; st++) {
+      const nx = [];
+      for (const i of front) for (const j of [i - 1, i + 1, i - w, i + w]) if (j >= 0 && j < N && hole[j] && lab[j] < 0) { lab[j] = lab[i]; add[lab[i]].push(j); nx.push(j); }
+      front = nx;
+    }
+    S.holeDbg = { holes: hole.reduce((a, v) => a + v, 0), front0: 0, added: add.reduce((a, v) => a + v.length, 0), maxSteps };
+    drawRegs.forEach((r, k) => {
+      if (!add[k].length) return;
+      // amplia a camada da área se o preenchimento passar da caixa dela
+      let nx0 = r.x, ny0 = r.y, nx1 = r.x + r.bw - 1, ny1 = r.y + r.bh - 1;
+      for (const i of add[k]) { const y = (i / w) | 0, x = i - y * w; if (x < nx0) nx0 = x; if (x > nx1) nx1 = x; if (y < ny0) ny0 = y; if (y > ny1) ny1 = y; }
+      const nbw = nx1 - nx0 + 1, nbh = ny1 - ny0 + 1, dx = r.x - nx0, dy = r.y - ny0;
+      const nl = mkCanvas(nbw, nbh), nctx = nl.getContext('2d'); nctx.drawImage(r.layer, dx, dy);
+      const img = nctx.getImageData(0, 0, nbw, nbh), c = cols[k];
+      for (const i of add[k]) { const y = (i / w) | 0, x = i - y * w, o = 4 * ((y - ny0) * nbw + (x - nx0)); img.data[o + 3] = 0; }
+      for (const i of add[k]) { const y = (i / w) | 0, x = i - y * w, o = 4 * ((y - ny0) * nbw + (x - nx0)); img.data[o] = c[0]; img.data[o+1] = c[1]; img.data[o+2] = c[2]; img.data[o+3] = 255; }
+      nctx.putImageData(img, 0, 0);
+      if (dx || dy) { const P = r.path; for (let q = 0; q < P.length; q += 2) { P[q] += dx; P[q + 1] += dy; } }
+      // passada extra do pincel sobre o trecho preenchido (para a caneta também passar por ali)
+      r.layer = nl; r.x = r.x0 = nx0; r.y = r.y0 = ny0; r.bw = nbw; r.bh = nbh; r.x1 = nx1; r.y1 = ny1;
+      let ax0 = Infinity, ax1 = -Infinity, ay0 = Infinity, ay1 = -Infinity;
+      for (const i of add[k]) { const y = (i / w) | 0, x = i - y * w; if (x < ax0) ax0 = x; if (x > ax1) ax1 = x; if (y < ay0) ay0 = y; if (y > ay1) ay1 = y; }
+      const extra = [], sp = r.brush * 0.6; let dir = 1;
+      for (let yy = ay0 + sp / 2; yy <= ay1 + sp / 2; yy += sp) { const a = dir > 0 ? ax0 : ax1, bb = dir > 0 ? ax1 : ax0, segs = Math.max(1, Math.ceil(Math.abs(bb - a) / 20));
+        for (let q = 0; q <= segs; q++) extra.push(a + (bb - a) * q / segs - nx0, Math.min(yy, ay1) - ny0); dir = -dir; }
+      const np2 = new Float32Array(r.path.length + extra.length); np2.set(r.path, 0); np2.set(extra, r.path.length); r.path = np2;
+      const cum = [0]; for (let q = 2; q < np2.length; q += 2) cum.push(cum[cum.length - 1] + Math.hypot(np2[q] - np2[q-2], np2[q+1] - np2[q-1]));
+      r.cum = new Float64Array(cum); r.len = cum[cum.length - 1] || 1;
+    });
+    if (extraText.some(v => v)) {
+      const ex = buildRegions(extraText, lineD, new Uint8Array(N), d, w, h, 'text', true, () => true, null).filter(r => r.area >= 8);
+      for (const r of ex) { r.isText = true; r.keep = true; }
+      textRegs.push(...ex);
+    }
+  }
   // bordas finas das letras (antisserrilhado colorido) aparecem junto com o traço da letra, não numa pintura à parte
   textRegs = textRegs.filter(r => {
     if (r.keep || r.nearFrac < 0.7) return true;
@@ -611,7 +702,7 @@ function thin(img, w, h) {
 }
 
 // transforma o esqueleto em traços ordenados, como uma caneta percorreria
-function traceStrokes(skel, dist, w, h, order, groups) {
+function traceStrokes(skel, dist, w, h, order, groups, cls) {
   const OFF = [-w-1, -w, -w+1, -1, 1, w-1, w, w+1];
   const DX = [-1, 0, 1, -1, 1, -1, 0, 1], DY = [-1, -1, -1, 0, 0, 1, 1, 1];
   const pts = []; for (let i = 0; i < skel.length; i++) if (skel[i]) pts.push(i);
@@ -623,6 +714,7 @@ function traceStrokes(skel, dist, w, h, order, groups) {
     let best = -1, bs = -1e9;
     for (let k = 0; k < 8; k++) {
       const j = cur + OFF[k]; if (!skel[j] || (avoid && avoid.has(j))) continue;
+      if (cls && cls[j] !== cls[cur]) continue;          // a caneta não passa de um grupo (silhueta, parte) para outro
       if (yLim !== undefined && ((j / w) | 0) > yLim) continue;
       const len = (DX[k] && DY[k]) ? 1.4142 : 1;
       let s = (dx * DX[k] + dy * DY[k]) / len;
@@ -677,7 +769,7 @@ function traceStrokes(skel, dist, w, h, order, groups) {
       if (!g.length) continue;
       const gy0 = (g[0] / w) | 0, gy1 = (g[g.length - 1] / w) | 0;
       // letras: a caneta segue cada traço inteiro (perna por perna); desenhos: faixa que desce
-      const gb = order === 'text' ? 1e9 : Math.max(8, (gy1 - gy0) * 0.08);
+      const gb = (order === 'text' || order === 'free') ? 1e9 : Math.max(8, (gy1 - gy0) * 0.08);
       let gp = 0, firstInGroup = true;
       while (true) {
         while (gp < g.length && !skel[g[gp]]) gp++;
@@ -687,11 +779,11 @@ function traceStrokes(skel, dist, w, h, order, groups) {
         for (let k = gp; k < g.length; k++) {
           const i = g[k], y = (i / w) | 0; if (y > yL) break; if (!skel[i]) continue;
           const x = i - y * w;
-          const score = firstInGroup || !pen ? (order === 'text' ? x + y * 0.6 : x) : (x - pen[0]) ** 2 + (y - pen[1]) ** 2;
+          const score = firstInGroup || !pen ? (order === 'text' ? x + y * 0.6 : order === 'free' ? y + x * 0.2 : x) : (x - pen[0]) ** 2 + (y - pen[1]) ** 2;
           if (score < best) { best = score; start = i; }
         }
         firstInGroup = false;
-        runFrom(start, order === 'text' ? undefined : yL);
+        runFrom(start, (order === 'text' || order === 'free') ? undefined : yL);
       }
     }
   }
@@ -887,6 +979,130 @@ function topDown(regs, height, pen) {
   return out;
 }
 
+// ===== ordem "como uma pessoa desenha" =====
+// partes = áreas fechadas pelo traço (rosto, cabelo, camisa, olho...); objeto = conjunto de traço + partes encostadas.
+// Para cada objeto (da esquerda para a direita): 1) a silhueta (traço que encosta no fundo); 2) parte por parte,
+// a borda da parte e depois os detalhes de dentro dela (olhos, rugas, botões).
+function humanOrder(line, mText, skel, dist, d, bg, tol, w, h) {
+  const N = w * h;
+  // partes: componentes 4-conexos do que não é traço
+  const part = new Int32Array(N).fill(-1), stack = new Int32Array(N), area = [], bbox = [];
+  let np = 0;
+  for (let s0 = 0; s0 < N; s0++) {
+    if (line[s0] || part[s0] >= 0) continue;
+    let sp = 0, n = 0, x0 = w, y0 = h, x1 = 0, y1 = 0, touch = false; stack[sp++] = s0; part[s0] = np;
+    while (sp) { const i = stack[--sp]; n++; const y = (i / w) | 0, x = i - y * w;
+      if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y;
+      if (x <= 1 || y <= 1 || x >= w - 2 || y >= h - 2) touch = true;
+      if (x > 0 && !line[i - 1] && part[i - 1] < 0) { part[i - 1] = np; stack[sp++] = i - 1; }
+      if (x < w - 1 && !line[i + 1] && part[i + 1] < 0) { part[i + 1] = np; stack[sp++] = i + 1; }
+      if (y > 0 && !line[i - w] && part[i - w] < 0) { part[i - w] = np; stack[sp++] = i - w; }
+      if (y < h - 1 && !line[i + w] && part[i + w] < 0) { part[i + w] = np; stack[sp++] = i + w; } }
+    area.push(n); bbox.push([x0, y0, x1, y1, touch]); np++;
+  }
+  // fundo: partes que encostam na borda da imagem e são da cor do fundo (ou enormes)
+  const isBg = new Uint8Array(np), tol2 = (tol * 1.6) ** 2;
+  { const sum = new Float64Array(np * 3);
+    for (let i = 0; i < N; i++) { const k = part[i]; if (k < 0) continue; sum[3*k] += d[4*i]; sum[3*k+1] += d[4*i+1]; sum[3*k+2] += d[4*i+2]; }
+    for (let k = 0; k < np; k++) { if (!bbox[k][4]) continue;
+      const r = sum[3*k] / area[k] - bg[0], g = sum[3*k+1] / area[k] - bg[1], b = sum[3*k+2] / area[k] - bg[2];
+      if (r*r + g*g + b*b <= tol2 || area[k] > N * 0.25) isBg[k] = 1; } }
+  // objetos: traço (sem texto) + partes que não são fundo, 8-conexo
+  const obj = new Int32Array(N).fill(-1), objs = [];
+  const inObj = i => (line[i] && !mText[i]) || (part[i] >= 0 && !isBg[part[i]]);
+  for (let s0 = 0; s0 < N; s0++) {
+    if (obj[s0] >= 0 || !inObj(s0)) continue;
+    const id = objs.length; let sp = 0, n = 0, x0 = w, y0 = h, x1 = 0, y1 = 0; stack[sp++] = s0; obj[s0] = id;
+    while (sp) { const i = stack[--sp]; n++; const y = (i / w) | 0, x = i - y * w;
+      if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y;
+      for (const j of [i - 1, i + 1, i - w, i + w, i - w - 1, i - w + 1, i + w - 1, i + w + 1]) {
+        if (j < 0 || j >= N || obj[j] >= 0) continue; const jy = (j / w) | 0, jx = j - jy * w; if (Math.abs(jx - x) > 1) continue;
+        if (inObj(j)) { obj[j] = id; stack[sp++] = j; } } }
+    objs.push({ id, x0, y0, x1, y1, n });
+  }
+  // para cada pixel do esqueleto: que partes ficam de cada lado (raios em 8 direções até sair do traço)
+  const DX = [-1, 0, 1, -1, 1, -1, 0, 1], DY = [-1, -1, -1, 0, 0, 1, 1, 1];
+  const bigThr = Math.max(400, N * 0.0015);
+  const pxs = []; for (let i = 0; i < N; i++) if (skel[i]) pxs.push(i);
+  const info = new Map(), nb = new Map();   // nb: vizinhança entre partes
+  const addNb = (a, b) => { if (a === b) return; if (!nb.has(a)) nb.set(a, new Set()); nb.get(a).add(b); };
+  for (const i of pxs) {
+    const y = (i / w) | 0, x = i - y * w, maxS = Math.ceil(dist[i] * 2 + 4);
+    let bgT = false; const P = [];
+    for (let k = 0; k < 8; k++) {
+      for (let st = 1; st <= maxS; st++) { const xx = x + DX[k] * st, yy = y + DY[k] * st; if (xx < 0 || yy < 0 || xx >= w || yy >= h) { bgT = true; break; }
+        const j = yy * w + xx; if (line[j]) continue; const pk = part[j]; if (pk >= 0) { if (isBg[pk]) bgT = true; else if (!P.includes(pk)) P.push(pk); } break; }
+    }
+    for (let a = 0; a < P.length; a++) for (let b = 0; b < P.length; b++) addNb(P[a], P[b]);
+    info.set(i, { bgT, P });
+  }
+  // "pai" de uma parte pequena (olho → rosto): a maior parte vizinha
+  const parent = p => { let cur = p; for (let g = 0; g < 6 && area[cur] < bigThr; g++) {
+      let best = -1; for (const q of (nb.get(cur) || [])) if (area[q] > area[cur] && (best < 0 || area[q] > area[best])) best = q;
+      if (best < 0) break; cur = best; } return cur; };
+  // grupo de cada pixel: 0 = silhueta do objeto; senão a parte "dona" (grande) e se é borda (B) ou detalhe (D)
+  const key = new Map(), cls = new Int32Array(N).fill(-1);
+  const keyOf = (o, kind, p) => { const k = o + '|' + kind + '|' + p; if (!key.has(k)) key.set(k, { o, kind, p, px: [], id: key.size }); return key.get(k); };
+  for (const i of pxs) {
+    const o = obj[i] >= 0 ? obj[i] : -1, { bgT, P } = info.get(i);
+    let g;
+    if (bgT || !P.length) g = keyOf(o, 'S', -1);
+    else {
+      const smalls = P.filter(q => area[q] < bigThr);
+      if (smalls.length) { const sm = smalls.reduce((a, b) => area[a] <= area[b] ? a : b); g = keyOf(o, 'D', parent(sm)); }
+      else { const bigs = P.slice().sort((a, b) => area[a] - area[b]); g = keyOf(o, P.length > 1 ? 'B' : 'D', bigs[0]); }
+    }
+    g.px.push(i); cls[i] = g.id;
+  }
+  // ordem: objetos da esquerda para a direita; em cada um, silhueta → partes (de cima, depois a vizinha mais próxima)
+  const groups = [], partSeq = [];
+  const objOrder = objs.filter(o => key.has(o.id + '|S|-1') || [...key.values()].some(g => g.o === o.id)).sort((a, b) => a.x0 - b.x0);
+  const cen = p => [(bbox[p][0] + bbox[p][2]) / 2, (bbox[p][1] + bbox[p][3]) / 2];
+  const byObj = new Map(); for (const g of key.values()) { if (!byObj.has(g.o)) byObj.set(g.o, []); byObj.get(g.o).push(g); }
+  const orderObj = o => {
+    const gs = byObj.get(o) || [];
+    const sil = gs.find(g => g.kind === 'S'); if (sil) groups.push(sil.px);
+    const parts = [...new Set(gs.filter(g => g.kind !== 'S').map(g => g.p))];
+    let pen = null; const rest = parts.slice();
+    while (rest.length) {
+      let bi = 0, bs = Infinity;
+      rest.forEach((p, k) => { const c = cen(p), sc = pen ? (c[0] - pen[0]) ** 2 + (c[1] - pen[1]) ** 2 : c[1] * 4 + c[0]; if (sc < bs) { bs = sc; bi = k; } });
+      const p = rest.splice(bi, 1)[0]; pen = cen(p); partSeq.push(p);
+      const b = gs.find(g => g.kind === 'B' && g.p === p), dd = gs.find(g => g.kind === 'D' && g.p === p);
+      if (b) groups.push(b.px); if (dd) groups.push(dd.px);
+    }
+  };
+  for (const o of objOrder) orderObj(o.id);
+  if (byObj.has(-1)) orderObj(-1);
+  const parentOf = new Int32Array(np).map((_, k) => parent(k));
+  return { groups, cls, part, obj, objs: objOrder, partSeq, area, parentOf };
+}
+
+// pintura na mesma ordem do contorno: parte por parte (cada parte grande seguida das partes pequenas dela)
+function paintOrder(regs, P, w) {
+  const rank = new Map(P.partSeq.map((p, k) => [p, k]));
+  const objRank = new Map(P.objs.map((o, k) => [o.id, k]));
+  const keyOf = r => {
+    const p = P.part[r.seed], o = P.obj[r.seed];
+    const pr = p >= 0 ? (rank.has(p) ? rank.get(p) : rank.has(P.parentOf[p]) ? rank.get(P.parentOf[p]) + 0.5 : null) : null;
+    return pr !== null ? pr : 1e6 + (objRank.has(o) ? objRank.get(o) : 1e3) * 10;
+  };
+  const groups = new Map();
+  for (const r of regs) { const k = keyOf(r); if (!groups.has(k)) groups.set(k, []); groups.get(k).push(r); }
+  const out = []; let pen = null;
+  for (const k of [...groups.keys()].sort((a, b) => a - b)) {
+    const rest = groups.get(k).sort((a, b) => b.area - a.area);
+    let first = true;
+    while (rest.length) {
+      let bi = 0, bs = Infinity;
+      if (!first || !pen) rest.forEach((r, j) => { const cx = r.x + r.bw / 2, cy = r.y + r.bh / 2, sc = !pen ? r.y0 * 4 + r.x0 : (cx - pen[0]) ** 2 + (cy - pen[1]) ** 2; if (sc < bs) { bs = sc; bi = j; } });
+      const r = rest.splice(bi, 1)[0]; out.push(r); first = false;
+      const q = polyAt(r.path, r.cum, r.len); pen = [r.x + q[0], r.y + q[1]];
+    }
+  }
+  return out;
+}
+
 // junta os traços do desenho com os do texto (texto depois)
 function joinStrokes(a, b) {
   const pts = new Float32Array(a.pts.length + b.pts.length); pts.set(a.pts, 0); pts.set(b.pts, a.pts.length);
@@ -960,44 +1176,45 @@ function buildRegions(fill, lineD, owned, d, w, h, order, doFill, keepAll, zone)
     out = readingOrder(out);
   } else out.sort((a, b) => (a.y0 - b.y0) || (a.x0 - b.x0));
 
-  // cada área vira uma ou mais "faixas" de pintura (áreas altas são pintadas em faixas que descem),
-  // com pincel do tamanho de uma caneta grossa; o caminho é um vaivém dentro do formato da área
+  // cada área é pintada inteira, com traços de caneta no sentido do comprimento da área (eixo principal),
+  // indo e voltando: a ponta da caneta passa por toda a parte
   const pieces = [];
-  const penW = Math.max(8, h * 0.02), bandH = Math.max(penW * 5, h * 0.07);
+  const penW = Math.max(8, h * 0.02);
   for (const r of out) {
-    const bw = r.x1 - r.x0 + 1, bh = r.y1 - r.y0 + 1;
-    const rowMin = new Int32Array(bh).fill(1e9), rowMax = new Int32Array(bh).fill(-1);
-    for (const i of r.px) { const y = (i / w) | 0, x = i - y * w, lx = x - r.x0, ly = y - r.y0; if (lx < rowMin[ly]) rowMin[ly] = lx; if (lx > rowMax[ly]) rowMax[ly] = lx; }
-    const brush = clamp(Math.sqrt(r.px.length) / 10, penW, penW * 2.2);
-    const nb = Math.max(1, Math.round(bh / bandH));
-    for (let b = 0; b < nb; b++) {
-      const py0 = Math.floor(b * bh / nb), py1 = Math.floor((b + 1) * bh / nb);    // linhas [py0, py1) da área
-      let pxMin = 1e9, pxMax = -1, cnt = 0;
-      for (let y = py0; y < py1; y++) if (rowMax[y] >= 0) { pxMin = Math.min(pxMin, rowMin[y]); pxMax = Math.max(pxMax, rowMax[y]); }
-      if (pxMax < 0) continue;
-      const pw = pxMax - pxMin + 1, ph = py1 - py0;
-      const img = new ImageData(pw, ph);
-      for (const i of r.px) { const y = (i / w) | 0, x = i - y * w, lx = x - r.x0, ly = y - r.y0;
-        if (ly < py0 || ly >= py1) continue; const o = 4 * ((ly - py0) * pw + (lx - pxMin)); cnt++;
-        img.data[o] = d[4*i]; img.data[o+1] = d[4*i+1]; img.data[o+2] = d[4*i+2]; img.data[o+3] = d[4*i+3]; }
-      const layer = mkCanvas(pw, ph); layer.getContext('2d').putImageData(img, 0, 0);
-      const spacing = brush * 0.6, path = [];
-      let dir = 1;
-      for (let cy = spacing / 2; cy < ph + spacing / 2; cy += spacing) {
-        let mn = 1e9, mx = -1;
-        for (let y = Math.max(0, Math.floor(cy - spacing / 2)); y <= Math.min(ph - 1, Math.ceil(cy + spacing / 2)); y++) {
-          const ry = py0 + y; if (rowMax[ry] >= 0) { mn = Math.min(mn, rowMin[ry] - pxMin); mx = Math.max(mx, rowMax[ry] - pxMin); } }
-        if (mx < 0) continue;
-        const a = dir > 0 ? mn : mx, bb = dir > 0 ? mx : mn, segs = Math.max(1, Math.ceil(Math.abs(bb - a) / 20));
-        for (let k = 0; k <= segs; k++) { const t = k / segs; path.push(a + (bb - a) * t, Math.min(ph, cy) + Math.sin((t * 3 + cy * 0.05) * Math.PI) * spacing * 0.12); }
-        dir = -dir;
-      }
-      if (!path.length) continue;
-      const cum = [0];
-      for (let k = 2; k < path.length; k += 2) cum.push(cum[cum.length - 1] + Math.hypot(path[k] - path[k-2], path[k+1] - path[k-1]));
-      const X = r.x0 + pxMin, Y = r.y0 + py0;
-      pieces.push({ isText: !!r.isText, nearFrac: r.nearFrac, keep: !!r.keep, regArea: r.px.length, x: X, y: Y, x0: X, y0: Y, x1: X + pw - 1, y1: Y + ph - 1, bw: pw, bh: ph, layer, brush, path: new Float32Array(path), cum: new Float64Array(cum), len: cum[cum.length - 1] || 1, area: cnt });
+    const bw = r.x1 - r.x0 + 1, bh = r.y1 - r.y0 + 1, n = r.px.length;
+    const img = new ImageData(bw, bh);
+    let mx = 0, my = 0;
+    for (const i of r.px) { const y = (i / w) | 0, x = i - y * w, o = 4 * ((y - r.y0) * bw + (x - r.x0));
+      img.data[o] = d[4*i]; img.data[o+1] = d[4*i+1]; img.data[o+2] = d[4*i+2]; img.data[o+3] = d[4*i+3]; mx += x; my += y; }
+    mx /= n; my /= n;
+    let sxx = 0, syy = 0, sxy = 0;
+    for (const i of r.px) { const y = (i / w) | 0, x = i - y * w, dx = x - mx, dy = y - my; sxx += dx * dx; syy += dy * dy; sxy += dx * dy; }
+    const ang = 0.5 * Math.atan2(2 * sxy, sxx - syy), ux = Math.cos(ang), uy = Math.sin(ang), vx = -uy, vy = ux;
+    const brush = clamp(Math.sqrt(n) / 6, penW * 0.8, penW * 2.5), spacing = brush * 0.6;
+    // para cada faixa ao longo de v, o trecho [min u, max u] da área
+    let vmin = Infinity, vmax = -Infinity;
+    for (const i of r.px) { const y = (i / w) | 0, x = i - y * w, v = (x - mx) * vx + (y - my) * vy; if (v < vmin) vmin = v; if (v > vmax) vmax = v; }
+    const nbands = Math.max(1, Math.ceil((vmax - vmin + 1) / spacing));
+    const bmin = new Float64Array(nbands).fill(Infinity), bmax = new Float64Array(nbands).fill(-Infinity);
+    for (const i of r.px) { const y = (i / w) | 0, x = i - y * w, u = (x - mx) * ux + (y - my) * uy, v = (x - mx) * vx + (y - my) * vy;
+      const b = Math.min(nbands - 1, Math.floor((v - vmin) / spacing)); if (u < bmin[b]) bmin[b] = u; if (u > bmax[b]) bmax[b] = u; }
+    const path = []; let dir = 1;
+    // começa pela ponta de cima da área
+    const order = [...Array(nbands).keys()];
+    if (vy < 0) order.reverse();
+    for (const b of order) {
+      if (bmax[b] < bmin[b]) continue;
+      const v = vmin + (b + 0.5) * spacing, a = dir > 0 ? bmin[b] : bmax[b], c = dir > 0 ? bmax[b] : bmin[b];
+      const segs = Math.max(1, Math.ceil(Math.abs(c - a) / 20));
+      for (let k = 0; k <= segs; k++) { const t = k / segs, u = a + (c - a) * t, wob = Math.sin((t * 3 + b * 0.7) * Math.PI) * spacing * 0.12;
+        path.push(mx + u * ux + (v + wob) * vx - r.x0, my + u * uy + (v + wob) * vy - r.y0); }
+      dir = -dir;
     }
+    if (!path.length) continue;
+    const cum = [0];
+    for (let k = 2; k < path.length; k += 2) cum.push(cum[cum.length - 1] + Math.hypot(path[k] - path[k-2], path[k+1] - path[k-1]));
+    const layer = mkCanvas(bw, bh); layer.getContext('2d').putImageData(img, 0, 0);
+    pieces.push({ seed: r.px[0], isText: !!r.isText, nearFrac: r.nearFrac, keep: !!r.keep, regArea: n, x: r.x0, y: r.y0, x0: r.x0, y0: r.y0, x1: r.x1, y1: r.y1, bw, bh, layer, brush, path: new Float32Array(path), cum: new Float64Array(cum), len: cum[cum.length - 1] || 1, area: n });
   }
   return pieces;
 }
