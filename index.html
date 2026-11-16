@@ -1,0 +1,1509 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Traço a Traço</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,700&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+/* Layout: painel de ajustes à esquerda, palco do vídeo à direita; papel claro, tinta azul-escura, marca-texto amarelo. */
+:root{
+  --paper:#f6f5f1;
+  --panel:#ffffff;
+  --ink:#1d2433;
+  --muted:#5f6675;
+  --line:#dddbd3;
+  --accent:#1f4fd1;
+  --accent-ink:#ffffff;
+  --mark:#ffd84a;
+  --ok:#1f7a4d;
+  --warn:#a14a00;
+  --stage:#e9e7e0;
+  --font-display:"Bricolage Grotesque", "Segoe UI", system-ui, sans-serif;
+  --font-body:"IBM Plex Sans", "Segoe UI", system-ui, sans-serif;
+  color-scheme:light;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --paper:#14161b; --panel:#1c1f26; --ink:#eceef3; --muted:#a3a9b6; --line:#2e323c;
+    --accent:#6d93ff; --accent-ink:#0d1220; --mark:#ffd84a; --ok:#5fd19a; --warn:#ffb36b; --stage:#0f1115;
+    color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --paper:#14161b; --panel:#1c1f26; --ink:#eceef3; --muted:#a3a9b6; --line:#2e323c;
+  --accent:#6d93ff; --accent-ink:#0d1220; --mark:#ffd84a; --ok:#5fd19a; --warn:#ffb36b; --stage:#0f1115;
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%}
+body{background:var(--paper);color:var(--ink);font-family:var(--font-body);font-size:15px;line-height:1.5}
+header{display:flex;flex-wrap:wrap;align-items:baseline;gap:6px 16px;padding:18px 24px 10px}
+h1{font-family:var(--font-display);font-size:28px;line-height:1.1;margin:0;letter-spacing:-0.01em;text-wrap:balance}
+h1 span{background:linear-gradient(transparent 62%, var(--mark) 62%);padding:0 2px}
+header p{margin:0;color:var(--muted);max-width:65ch}
+main{display:grid;grid-template-columns:330px 1fr;gap:20px;padding:10px 24px 24px;align-items:start}
+@media (max-width:860px){main{grid-template-columns:1fr;padding:10px 16px 16px}header{padding:16px}}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:16px;display:flex;flex-direction:column;gap:14px}
+.drop{border:2px dashed var(--line);border-radius:8px;padding:14px;text-align:center;cursor:pointer;color:var(--muted);transition:border-color .15s}
+.drop:hover,.drop.over,.drop:focus-visible{border-color:var(--accent);outline:none;color:var(--ink)}
+.drop strong{color:var(--ink);display:block;font-weight:600}
+.drop .fname{font-size:13px;margin-top:4px;word-break:break-all}
+.field{display:flex;flex-direction:column;gap:4px;min-width:0}
+.panel{min-width:0}
+.field label,.field .lbl{font-weight:600;font-size:14px;display:flex;justify-content:space-between;gap:8px}
+.field label output{font-weight:500;color:var(--muted);font-variant-numeric:tabular-nums}
+.field small{color:var(--muted);font-size:12.5px;line-height:1.4}
+input[type=range]{width:100%;accent-color:var(--accent)}
+select{width:100%;max-width:100%;font:inherit;padding:7px 8px;border-radius:6px;border:1px solid var(--line);background:var(--panel);color:var(--ink)}
+.check{display:flex;gap:8px;align-items:center;font-weight:600;font-size:14px}
+.check input{accent-color:var(--accent);width:16px;height:16px}
+fieldset{border:0;padding:0;margin:0;display:flex;flex-direction:column;gap:12px}
+legend{font-family:var(--font-display);font-size:13px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);margin-bottom:8px}
+hr{border:0;border-top:1px solid var(--line);margin:0}
+.stagewrap{display:flex;flex-direction:column;gap:12px;min-width:0}
+.stage{background:var(--stage);border-radius:10px;padding:14px;display:flex;align-items:center;justify-content:center;min-height:300px}
+.stage canvas,.stage video{max-width:100%;max-height:70vh;height:auto;display:block;box-shadow:0 1px 3px rgba(0,0,0,.18);background:#fff}
+.bar{display:flex;flex-wrap:wrap;gap:10px;align-items:center}
+button{font:inherit;font-weight:600;border-radius:7px;padding:9px 16px;border:1px solid var(--line);background:var(--panel);color:var(--ink);cursor:pointer}
+button:hover{border-color:var(--accent)}
+button:focus-visible,select:focus-visible,input:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+button.primary{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+button:disabled{opacity:.5;cursor:not-allowed}
+.stats{display:flex;flex-wrap:wrap;gap:8px;font-size:13px}
+.chip{border:1px solid var(--line);border-radius:999px;padding:3px 10px;background:var(--panel);font-variant-numeric:tabular-nums}
+.chip b{font-weight:600}
+.chip.warn{border-color:var(--warn);color:var(--warn)}
+.status{font-size:13.5px;color:var(--muted);min-height:1.5em}
+.status.ok{color:var(--ok)}.status.err{color:var(--warn)}
+progress{width:220px;height:10px;accent-color:var(--accent)}
+.result{display:none;flex-direction:column;gap:10px;background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:14px}
+.result.show{display:flex}
+.result h2{font-family:var(--font-display);font-size:18px;margin:0}
+.result video{max-width:100%;max-height:50vh;background:#000;border-radius:6px}
+.tips{font-size:13px;color:var(--muted);margin:0;padding-left:18px;display:flex;flex-direction:column;gap:4px}
+@media (prefers-reduced-motion: reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+<header>
+  <h1><span>Traço a Traço</span></h1>
+  <p>Envie um desenho: o contorno é traçado como caneta invisível e depois a pintura preenche cada área. Exporta em MP4, com ou sem a mão desenhando, sem marca d'água.</p>
+</header>
+<main>
+  <section class="panel" aria-label="Ajustes">
+    <div class="drop" id="drop" tabindex="0" role="button" aria-label="Escolher imagem">
+      <strong>Arraste a imagem aqui</strong>
+      ou clique para escolher (PNG, JPG, WebP)
+      <div class="fname" id="fname">Exemplo carregado: pato de teste</div>
+      <input type="file" id="file" accept="image/*" hidden>
+    </div>
+
+    <fieldset>
+      <legend>Vídeo</legend>
+      <div class="field">
+        <label for="format">Formato</label>
+        <select autocomplete="off" id="format">
+          <option value="16:9">16:9 · YouTube (1920×1080)</option>
+          <option value="9:16">9:16 · Shorts/Reels (1080×1920)</option>
+          <option value="1:1">1:1 · Quadrado (1080×1080)</option>
+          <option value="original">Tamanho da imagem (até 1920 px)</option>
+        </select>
+      </div>
+      <div class="field">
+        <label for="order">Ordem dos traços</label>
+        <select autocomplete="off" id="order">
+          <option value="left">Da esquerda para a direita (objeto por objeto)</option>
+          <option value="top">De cima para baixo</option>
+          <option value="near">Caminho mais curto (caneta segue o traço vizinho)</option>
+          <option value="text">Só texto e números (linha por linha)</option>
+        </select>
+      </div>
+      <label class="check"><input type="checkbox" autocomplete="off" id="textLast" checked> Letras e números por último</label>
+      <label class="check"><input type="checkbox" autocomplete="off" id="autoDur" checked> Tempos automáticos pelo nível de detalhe</label>
+      <div class="field">
+        <label for="lineDur">Duração do contorno <output id="lineDurO">6 s</output></label>
+        <input type="range" autocomplete="off" id="lineDur" min="1" max="30" step="0.5" value="6">
+      </div>
+      <label class="check"><input type="checkbox" autocomplete="off" id="doFill" checked> Pintar as áreas internas</label>
+      <div class="field">
+        <label for="fillDur">Duração da pintura <output id="fillDurO">4 s</output></label>
+        <input type="range" autocomplete="off" id="fillDur" min="1" max="20" step="0.5" value="4">
+      </div>
+      <label class="check"><input type="checkbox" autocomplete="off" id="showHand" checked> Mostrar a mão desenhando</label>
+      <div class="field">
+        <label for="handSize">Tamanho da mão <output id="handSizeO">35%</output></label>
+        <input type="range" autocomplete="off" id="handSize" min="15" max="70" step="5" value="35">
+      </div>
+      <div class="field">
+        <label for="hold">Pausa no final <output id="holdO">1.5 s</output></label>
+        <input type="range" autocomplete="off" id="hold" min="0" max="6" step="0.5" value="1.5">
+      </div>
+    </fieldset>
+    <hr>
+    <fieldset>
+      <legend>Detecção</legend>
+      <div class="field">
+        <label for="thr">O que conta como contorno <output id="thrO">110</output></label>
+        <input type="range" autocomplete="off" id="thr" min="30" max="210" step="5" value="110">
+        <small>Aumente se partes do contorno ficarem de fora; diminua se áreas escuras da pintura virarem traço. Use "Ver detecção" para conferir.</small>
+      </div>
+      <div class="field">
+        <label for="tol">Tolerância do fundo <output id="tolO">38</output></label>
+        <input type="range" autocomplete="off" id="tol" min="10" max="100" step="2" value="38">
+        <small>Aumente para papel escaneado ou com textura.</small>
+      </div>
+    </fieldset>
+    <hr>
+    <ul class="tips">
+      <li>Funciona melhor com contorno escuro sobre fundo claro.</li>
+      <li>O último quadro do vídeo é sempre a sua imagem exata.</li>
+    </ul>
+  </section>
+
+  <section class="stagewrap" aria-label="Prévia">
+    <div class="bar">
+      <button class="primary" id="play">▶ Reproduzir prévia</button>
+      <button id="detect" aria-pressed="false">Ver detecção</button>
+      <button id="export">Exportar MP4</button>
+      <progress id="prog" max="1" value="0" hidden></progress>
+    </div>
+    <div class="stats" id="stats"></div>
+    <div class="status" id="status" role="status"></div>
+    <div class="stage"><canvas id="view" width="1920" height="1080" aria-label="Prévia da animação"></canvas></div>
+    <div class="result" id="result">
+      <h2>Vídeo pronto</h2>
+      <video id="outVideo" controls playsinline></video>
+      <div class="bar"><button class="primary" id="save">Salvar vídeo</button><span class="status" id="saveStatus"></span></div>
+    </div>
+  </section>
+</main>
+
+<script src="https://cdn.jsdelivr.net/npm/mp4-muxer@5.2.1/build/mp4-muxer.js"></script>
+<script src="ocr/ort.wasm.min.js"></script>
+<script>
+"use strict";
+/* ================= imagem de exemplo ================= */
+const SAMPLE_SVG = `<svg xmlns="http://www.w3.org/2000/svg" width="900" height="900" viewBox="0 0 900 900"><rect width="900" height="900" fill="#ffffff"/><g stroke="#1a1a1a" stroke-width="9" stroke-linejoin="round" stroke-linecap="round"><ellipse cx="470" cy="600" rx="290" ry="190" fill="#f7d23e"/><path d="M300 560 q120 -60 230 20 q-60 90 -230 -20z" fill="#f2b705"/><circle cx="380" cy="320" r="160" fill="#f7d23e"/><path d="M230 330 q-110 10 -130 50 q80 40 150 10z" fill="#f28c28"/><circle cx="410" cy="280" r="38" fill="#ffffff"/><circle cx="420" cy="285" r="16" fill="#1a1a1a"/><path d="M330 180 q20 -60 70 -70 M360 175 q40 -50 90 -40" fill="none"/><rect x="520" y="230" width="150" height="80" rx="10" fill="#3a7bd5"/><path d="M600 800 l-30 50 h80 z M420 800 l-30 50 h80 z" fill="#f28c28"/></g></svg>`;
+
+/* ================= mão do pato (ponta da caneta em TIP; WRIST = altura da ponta ao punho) ================= */
+const HAND_SRC = 'data:image/webp;base64,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';
+const HAND_TIP = [4, 2], HAND_WRIST = 606;
+// suavização da mão: média centrada no tempo (segundos para cada lado) e espessura do pincel
+const TUNE = { winLine: 0.08, winPaint: 0.12, brushDiv: 3, travel: 0.35, maxJump: 0.09 };
+const HAND = new Image(); const handReady = new Promise(r => { HAND.onload = r; HAND.onerror = r; }); HAND.src = HAND_SRC;
+
+/* ================= leitura de texto: detector + leitor neurais (PaddleOCR PP-OCRv4, ONNX) servidos pela própria página ================= */
+// o detector acha onde há texto (inclusive letra à mão e texto estilizado); o leitor confirma lendo o que está escrito,
+// e só fica o que foi lido com confiança. Desenhos que "parecem" texto (flores, óculos, mãos) não passam na leitura.
+const OCR = { ready: null, failed: false, cache: new Map(), lastCount: null };
+function getOcr() {
+  if (OCR.failed) return Promise.resolve(null);
+  if (!OCR.ready) OCR.ready = (async () => {
+    if (!window.ort) throw new Error('onnxruntime não carregou');
+    const base = new URL('ocr/', location.href).href;
+    ort.env.wasm.wasmPaths = base; ort.env.wasm.numThreads = 1; ort.env.wasm.proxy = false;
+    const opts = { executionProviders: ['wasm'] };
+    const [det, rec, keysTxt] = await Promise.all([
+      ort.InferenceSession.create(base + 'det-model.wasm', opts),
+      ort.InferenceSession.create(base + 'rec-model.wasm', opts),
+      fetch(base + 'keys.txt').then(r => r.text()),
+    ]);
+    const keys = ['', ...keysTxt.split('\n').filter((l, i, a) => i < a.length - 1 || l), ' '];
+    return { det, rec, keys };
+  })().catch(e => { console.warn('OCR indisponível:', e); OCR.failed = true; return null; });
+  return OCR.ready;
+}
+// palavras/linhas confiáveis: [x0, y0, x1, y1, texto, id]
+async function readWords(canvas, key) {
+  if (OCR.cache.has(key)) return OCR.cache.get(key);
+  const M = await getOcr(); if (!M) return null;
+  try {
+    const cw = canvas.width, ch = canvas.height;
+    // 1) detector: imagem até 1280 px, múltiplo de 32, normalizada (ImageNet)
+    const sc = Math.min(1, 1280 / Math.max(cw, ch));
+    const W = Math.max(32, Math.round(cw * sc / 32) * 32), H = Math.max(32, Math.round(ch * sc / 32) * 32);
+    const tmp = mkCanvas(W, H), tc = tmp.getContext('2d', { willReadFrequently: true }); tc.drawImage(canvas, 0, 0, W, H);
+    const px = tc.getImageData(0, 0, W, H).data, inp = new Float32Array(3 * W * H);
+    const mean = [0.485, 0.456, 0.406], std = [0.229, 0.224, 0.225];
+    for (let i = 0; i < W * H; i++) for (let c = 0; c < 3; c++) inp[c * W * H + i] = (px[4 * i + c] / 255 - mean[c]) / std[c];
+    const dOut = await M.det.run({ [M.det.inputNames[0]]: new ort.Tensor('float32', inp, [1, 3, H, W]) });
+    const prob = dOut[M.det.outputNames[0]].data;
+    const sx = cw / W, sy = ch / H, seen = new Uint8Array(W * H), stack = new Int32Array(W * H), boxes = [];
+    for (let s0 = 0; s0 < W * H; s0++) {
+      if (prob[s0] <= 0.3 || seen[s0]) continue;
+      let sp = 0, n = 0, sum = 0, x0 = W, y0 = H, x1 = 0, y1 = 0; stack[sp++] = s0; seen[s0] = 1;
+      while (sp) { const i = stack[--sp]; n++; sum += prob[i]; const y = (i / W) | 0, x = i - y * W;
+        if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y;
+        if (x > 0 && prob[i - 1] > 0.3 && !seen[i - 1]) { seen[i - 1] = 1; stack[sp++] = i - 1; }
+        if (x < W - 1 && prob[i + 1] > 0.3 && !seen[i + 1]) { seen[i + 1] = 1; stack[sp++] = i + 1; }
+        if (y > 0 && prob[i - W] > 0.3 && !seen[i - W]) { seen[i - W] = 1; stack[sp++] = i - W; }
+        if (y < H - 1 && prob[i + W] > 0.3 && !seen[i + W]) { seen[i + W] = 1; stack[sp++] = i + W; } }
+      if (n > 20 && sum / n > 0.6) {
+        // o detector marca o "miolo" do texto; expande meia altura para cada lado
+        const bx0 = x0 * sx, by0 = y0 * sy, bx1 = (x1 + 1) * sx, by1 = (y1 + 1) * sy, p = (by1 - by0) * 0.45 + 2;
+        boxes.push([Math.max(0, bx0 - p), Math.max(0, by0 - p), Math.min(cw, bx1 + p), Math.min(ch, by1 + p)]);
+      }
+    }
+    // 2) leitor: cada caixa vira uma faixa de 48 px de altura; decodificação CTC
+    const out = [];
+    for (const [bx0, by0, bx1, by1] of boxes) {
+      const bw = bx1 - bx0, bh = by1 - by0;
+      if (bh < Math.max(10, ch * 0.03) || bw < 4) continue;
+      const RH = 48, RW = Math.max(48, Math.min(960, Math.round(bw * RH / bh / 8) * 8));
+      const rc = mkCanvas(RW, RH), rx = rc.getContext('2d', { willReadFrequently: true });
+      rx.drawImage(canvas, bx0, by0, bw, bh, 0, 0, RW, RH);
+      const rp = rx.getImageData(0, 0, RW, RH).data, rin = new Float32Array(3 * RW * RH);
+      for (let i = 0; i < RW * RH; i++) for (let c = 0; c < 3; c++) rin[c * RW * RH + i] = (rp[4 * i + (2 - c)] / 255 - 0.5) / 0.5;
+      const rOut = await M.rec.run({ [M.rec.inputNames[0]]: new ort.Tensor('float32', rin, [1, 3, RH, RW]) });
+      const t = rOut[M.rec.outputNames[0]], T = t.dims[1], C = t.dims[2];
+      let txt = '', cs = 0, cn = 0, prev = 0;
+      for (let k = 0; k < T; k++) { let bi = 0, bv = -1; for (let c = 0; c < C; c++) { const v = t.data[k * C + c]; if (v > bv) { bv = v; bi = c; } }
+        if (bi && bi !== prev) { txt += M.keys[bi] || ''; cs += bv; cn++; } prev = bi; }
+      txt = txt.trim();
+      const ascii = (txt.match(/[\x20-\x7E]/g) || []).length, an = (txt.match(/[A-Za-z0-9]/g) || []).length;
+      if (!cn || !an || ascii / txt.length < 0.7 || cs / cn < 0.8) continue;
+      const p0 = (bh - 4) / 1.9 * 0.45 + 2;   // desfaz a expansão: miolo do texto
+      out.push([bx0, by0, bx1, by1, txt, out.length + 1, bx0 + p0, by0 + p0, bx1 - p0, by1 - p0]);
+    }
+    OCR.cache.set(key, out);
+    return out;
+  } catch (e) { console.warn('OCR falhou:', e); return null; }
+}
+
+/* ================= utilidades ================= */
+const $ = id => document.getElementById(id);
+const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
+const mkCanvas = (w, h) => { const c = document.createElement('canvas'); c.width = w; c.height = h; return c; };
+const nextTick = () => new Promise(r => setTimeout(r, 0));
+
+/* ================= geometria do quadro ================= */
+function computeLayout(iw, ih, format) {
+  let W, H;
+  if (format === 'original') {
+    const s = Math.min(1, 1920 / Math.max(iw, ih));
+    W = Math.max(2, Math.round(iw * s / 2) * 2); H = Math.max(2, Math.round(ih * s / 2) * 2);
+    return { W, H, ox: 0, oy: 0, w: W, h: H };
+  }
+  if (format === '9:16') { W = 1080; H = 1920; }
+  else if (format === '1:1') { W = 1080; H = 1080; }
+  else { W = 1920; H = 1080; }
+  const s = Math.min(W * 0.9 / iw, H * 0.9 / ih);
+  const w = Math.max(1, Math.round(iw * s)), h = Math.max(1, Math.round(ih * s));
+  return { W, H, ox: Math.floor((W - w) / 2), oy: Math.floor((H - h) / 2), w, h };
+}
+
+/* ================= análise da imagem ================= */
+function analyze(src, opt) {
+  const w = src.width, h = src.height, N = w * h;
+  const d = src.getContext('2d', { willReadFrequently: true }).getImageData(0, 0, w, h).data;
+  const lum = new Float32Array(N);
+  for (let i = 0; i < N; i++) lum[i] = d[4*i] * 0.299 + d[4*i+1] * 0.587 + d[4*i+2] * 0.114;
+
+  // cor do fundo = cor mais frequente na borda (moda por faixas de cor, depois média dentro da faixa)
+  const bins = new Map();
+  const addPx = i => { const key = (d[4*i] >> 4) * 256 + (d[4*i+1] >> 4) * 16 + (d[4*i+2] >> 4); let b = bins.get(key); if (!b) { b = [0, 0, 0, 0]; bins.set(key, b); } b[0]++; b[1] += d[4*i]; b[2] += d[4*i+1]; b[3] += d[4*i+2]; };
+  // vários anéis (borda e um pouco para dentro): uma moldura fina escura na borda não vira "fundo"
+  const step = Math.max(1, Math.floor((w + h) / 1200)), mn = Math.min(w, h);
+  for (const f of [0, 0.015, 0.03, 0.05]) {
+    const k = Math.round(mn * f), xa = k, xb = w - 1 - k, ya = k, yb = h - 1 - k;
+    for (let x = xa; x <= xb; x += step) { addPx(ya * w + x); addPx(yb * w + x); }
+    for (let y = ya; y <= yb; y += step) { addPx(y * w + xa); addPx(y * w + xb); }
+  }
+  const bl = b => (b[1] * 0.299 + b[2] * 0.587 + b[3] * 0.114) / b[0];
+  let topB = null; for (const b of bins.values()) if (!topB || b[0] > topB[0]) topB = b;
+  // fundo escuro só quando realmente domina; se uma cor clara for quase tão comum, ela é o fundo
+  if (bl(topB) < 110) { let light = null; for (const b of bins.values()) if (bl(b) >= 180 && (!light || b[0] > light[0])) light = b; if (light && light[0] >= topB[0] * 0.5) topB = light; }
+  const bg = [Math.round(topB[1] / topB[0]), Math.round(topB[2] / topB[0]), Math.round(topB[3] / topB[0])];
+  const med = a => { a.sort((p, q) => p - q); return a[a.length >> 1]; };
+  const bgLum = bg[0] * 0.299 + bg[1] * 0.587 + bg[2] * 0.114;
+
+  // máscara do contorno (sem a borda de 1 px)
+  const line = new Uint8Array(N);
+  const minDark = Math.min(40, bgLum * 0.25);
+  for (let y = 1; y < h - 1; y++) for (let x = 1; x < w - 1; x++) {
+    const i = y * w + x;
+    if (lum[i] < opt.thr && bgLum - lum[i] > minDark) line[i] = 1;
+  }
+  const minSpeck = Math.max(6, Math.round(N * 4e-6));
+  removeSmall(line, w, h, minSpeck, true);
+
+  // letras/números são detectados na tinta escura original (antes de separar cores), para letras coloridas continuarem traço
+  const textPix = new Uint8Array(N);
+  S.freeWords = [];
+  let ocrRows = [];
+  const textRows = [];   // [x0, y0, x1, y1] de cada linha de texto (inclui texto claro em caixas)
+  if (opt.order === 'text') textPix.fill(1);
+  else if (opt.textLast) {
+    const { label: l0, comps: c0 } = labelComps(line, w, h), t0 = detectText(c0, w, h, line, l0);
+    for (let i = 0; i < N; i++) if (l0[i] >= 0 && t0[l0[i]]) textPix[i] = 1;
+    // palavras lidas pelo OCR: os traços dentro da caixa de cada palavra são texto, e peças que ficam
+    // quase inteiras dentro de uma caixa (ex.: etiqueta vermelha em volta de "$400,000") também
+    // texto "solto" (título, legenda, número avulso) fica para o fim; texto dentro da paisagem (placa, caixa,
+    // etiqueta de produto) faz parte do desenho. Solto = a moldura ao redor da palavra é quase toda fundo.
+    const tolF = (opt.tol * 1.6) ** 2;
+    const edge = Math.max(3, Math.round(Math.min(w, h) * 0.012));   // moldura fina na borda da imagem conta como fundo
+    const isBgPx = i => { const y = (i / w) | 0, x = i - y * w; if (x < edge || y < edge || x >= w - edge || y >= h - edge) return true;
+      const dr = d[4*i] - bg[0], dg = d[4*i+1] - bg[1], db = d[4*i+2] - bg[2]; return dr*dr + dg*dg + db*db <= tolF; };
+    const isFree = (x0, y0, x1, y1) => {
+      const m = Math.max(4, (y1 - y0) * 0.35), X0 = Math.max(1, Math.round(x0 - m)), Y0 = Math.max(1, Math.round(y0 - m)), X1 = Math.min(w - 2, Math.round(x1 + m)), Y1 = Math.min(h - 2, Math.round(y1 + m));
+      let n = 0, b = 0;
+      const st = Math.max(1, Math.round((X1 - X0 + Y1 - Y0) / 400));
+      for (let x = X0; x <= X1; x += st) { for (const y of [Y0, Y1]) { n++; if (isBgPx(y * w + x)) b++; } }
+      for (let y = Y0; y <= Y1; y += st) { for (const x of [X0, X1]) { n++; if (isBgPx(y * w + x)) b++; } }
+      if (n && b / n >= 0.55) return true;
+      // ou: a palavra está numa etiqueta própria, pequena e solta (ex.: "$400,000" numa tarja vermelha)
+      const lim = (x1 - x0) * (y1 - y0) * 4, seen = new Set(), st2 = [];
+      for (let y = Math.round(y0); y <= Math.round(y1); y += 2) for (let x = Math.round(x0); x <= Math.round(x1); x += 2) { const i = y * w + x; if (i > 0 && i < N && !isBgPx(i)) { seen.add(i); st2.push(i); } }
+      let bx0 = w, by0 = h, bx1 = 0, by1 = 0;
+      while (st2.length) {
+        if (seen.size > lim) return false;
+        const i = st2.pop(), y = (i / w) | 0, x = i - y * w;
+        if (x < bx0) bx0 = x; if (x > bx1) bx1 = x; if (y < by0) by0 = y; if (y > by1) by1 = y;
+        for (const j of [i - 1, i + 1, i - w, i + w]) { const yy = (j / w) | 0, xx = j - yy * w; if (yy < 1 || yy >= h - 1 || xx < 1 || xx >= w - 1 || seen.has(j) || isBgPx(j)) continue; seen.add(j); st2.push(j); }
+      }
+      // a etiqueta precisa estar cercada de fundo (uma placa na frente da casa não está)
+      const m2 = Math.max(6, (by1 - by0) * 0.3), R0 = Math.max(1, Math.round(bx0 - m2)), S0 = Math.max(1, Math.round(by0 - m2)), R1 = Math.min(w - 2, Math.round(bx1 + m2)), S1 = Math.min(h - 2, Math.round(by1 + m2));
+      let n2 = 0, b2 = 0;
+      for (let x = R0; x <= R1; x += 2) for (const y of [S0, S1]) { n2++; if (isBgPx(y * w + x)) b2++; }
+      for (let y = S0; y <= S1; y += 2) for (const x of [R0, R1]) { n2++; if (isBgPx(y * w + x)) b2++; }
+      return n2 > 0 && b2 / n2 >= 0.6;
+    };
+    // fileiras achadas pelas regras que não estão soltas (letreiro dentro do desenho) deixam de ser texto
+    for (const r of t0.rows.slice()) if (!isFree(r[0], r[1], r[2], r[3])) {
+      c0.forEach((c, k) => { if (t0[k] && c.x0 >= r[0] - 2 && c.x1 <= r[2] + 2 && c.y0 >= r[1] - (r[3] - r[1]) * 0.5 && c.y1 <= r[3] + (r[3] - r[1]) * 0.2) t0[k] = 0; });
+      t0.rows.splice(t0.rows.indexOf(r), 1);
+    }
+    textPix.fill(0);
+    for (let i = 0; i < N; i++) if (l0[i] >= 0 && t0[l0[i]]) textPix[i] = 1;
+    if (opt.ocrWords && opt.ocrWords.length) {
+      const free = opt.ocrWords.filter(([x0, y0, x1, y1]) => isFree(x0, y0, x1, y1));
+      // peça de traço que está (quase) toda dentro da caixa da palavra é texto; peça de desenho que só encosta, não
+      const big = free.map(([x0, y0, x1, y1]) => { const p = (y1 - y0) * 0.25; return [x0 - p, y0 - p, x1 + p, y1 + p]; });
+      const inside = new Float64Array(c0.length);
+      if (big.length) for (let y = 1; y < h - 1; y++) for (let x = 1; x < w - 1; x++) { const i = y * w + x; if (l0[i] >= 0 && big.some(b => x >= b[0] && x <= b[2] && y >= b[1] && y <= b[3])) inside[l0[i]]++; }
+      c0.forEach((c, k) => { if (inside[k] / c.area > 0.6) t0[k] = 1; });
+      for (let i = 0; i < N; i++) if (l0[i] >= 0 && t0[l0[i]]) textPix[i] = 1;
+      // letras grudadas num desenho (legenda encostando na calça): só o que está no miolo da palavra vira texto
+      for (const wd of free) if (wd.length > 6) {
+        // na horizontal, só o miolo (não invade o desenho ao lado); na vertical, quase a altura toda da letra
+        const pv = 0;
+        const ph = (wd[6] - wd[0]) * 0.5;
+        const X0 = Math.max(1, Math.round(wd[6] - ph)), Y0 = Math.max(1, Math.round(wd[1] + pv)), X1 = Math.min(w - 2, Math.round(wd[8] + ph)), Y1 = Math.min(h - 2, Math.round(wd[3] - pv));
+        for (let y = Y0; y <= Y1; y++) for (let x = X0; x <= X1; x++) { const i = y * w + x; if (line[i]) textPix[i] = 1; }
+      }
+      ocrRows = free.map(wd => wd.slice(0, 4));
+      S.freeWords = free;
+    } else S.freeWords = [];
+    // (sem leitura de texto) linha de texto encostada num desenho (ex.: legenda tocando a calça): a faixa da linha continua
+    // para os lados enquanto houver letras, e esses pixels viram texto mesmo grudados no desenho
+    for (const r of t0.rows) {
+      if (ocrRows.length) { textRows.push(r); continue; }
+      const rh = r[3] - r[1] + 1, ya = Math.max(1, Math.round(r[1] + rh * 0.2)), yb = Math.min(h - 2, Math.round(r[3] - rh * 0.2));
+      const anyInk = (x, a, b) => { a = Math.max(1, Math.round(a)); b = Math.min(h - 2, Math.round(b)); for (let y = a; y <= b; y++) if (line[y * w + x]) return true; return false; };
+      // coluna de letra: tem tinta no meio da faixa e não é atravessada por desenho em cima E embaixo ao mesmo tempo
+      const ink = x => anyInk(x, ya, yb) && !(anyInk(x, r[1] - rh * 0.6, r[1] - rh * 0.15) && anyInk(x, r[3] + rh * 0.15, r[3] + rh * 0.6));
+      let ex0 = r[0], ex1 = r[2];
+      for (let x = r[0] - 1, gap = 0; x >= 1 && gap <= rh * 0.6; x--) { if (ink(x)) { ex0 = x; gap = 0; } else gap++; }
+      for (let x = r[2] + 1, gap = 0; x < w - 1 && gap <= rh * 0.6; x++) { if (ink(x)) { ex1 = x; gap = 0; } else gap++; }
+      const y0 = Math.max(1, Math.round(r[1] - rh * 0.1)), y1 = Math.min(h - 2, Math.round(r[3] + rh * 0.15));
+      for (let y = y0; y <= y1; y++) for (let x = ex0; x <= ex1; x++) if (line[y * w + x]) textPix[y * w + x] = 1;
+      textRows.push([ex0, r[1], ex1, r[3]]);
+    }
+    for (const r of ocrRows) textRows.push(r);
+  }
+  // separa contorno (fino) de áreas escuras de pintura (grossas, ex.: roupa verde-escura)
+  if (opt.order !== 'text') {
+    const D0 = distanceTransform(line, w, h);
+    const sk0 = line.slice(); thin(sk0, w, h);
+    const hws = []; for (let i = 0; i < N; i++) if (sk0[i]) hws.push(D0[i]);
+    if (hws.length) {
+      hws.sort((a, b) => a - b);
+      const hw = hws[Math.floor(hws.length * 0.5)];
+      const R0 = Math.max(hw * 2.2, hw + 3);
+      const core = new Uint8Array(N); let anyCore = false;
+      for (let i = 0; i < N; i++) if (D0[i] > R0) { core[i] = 1; anyCore = true; }
+      if (anyCore) {
+        const notCore = new Uint8Array(N); for (let y = 1; y < h - 1; y++) for (let x = 1; x < w - 1; x++) { const i = y * w + x; notCore[i] = core[i] ? 0 : 1; }
+        const toCore = distanceTransform(notCore, w, h);
+        const thick = new Uint8Array(N);
+        for (let i = 0; i < N; i++) if (line[i] && toCore[i] <= R0 + 1.5) thick[i] = 1;
+        // cor típica do traço = mediana dos pixels finos
+        // tom da tinta do contorno = quartil mais escuro dos traços finos (os traços finos têm borda mais clara por antisserrilhado)
+        const ls = [];
+        for (let i = 0; i < N; i++) if (line[i] && !thick[i]) ls.push(lum[i]);
+        if (ls.length) {
+          ls.sort((a, b) => a - b);
+          const lineLum = ls[Math.floor(ls.length * 0.25)];
+          // peças grossas: média de cor e tamanho decidem (calça/roupa escura e colorida → pintura; pupila/cabelo preto → contorno)
+          const { label: lt, comps: ct } = labelComps(thick, w, h);
+          const sumC = new Float64Array(ct.length), sumL = new Float64Array(ct.length);
+          for (let i = 0; i < N; i++) { const k = lt[i]; if (k < 0) continue; sumC[k] += Math.max(d[4*i], d[4*i+1], d[4*i+2]) - Math.min(d[4*i], d[4*i+1], d[4*i+2]); sumL[k] += lum[i]; }
+          const paintThick = ct.map((c, k) => { const mc = sumC[k] / c.area, ml = sumL[k] / c.area;
+            return c.area > N * 0.0015 && mc > 14; });
+          for (let i = 0; i < N; i++) if (line[i] && !textPix[i]) {
+            const r = d[4*i], g = d[4*i+1], b = d[4*i+2], chroma = Math.max(r, g, b) - Math.min(r, g, b);
+            // pixel a pixel (o contorno preto encostado na roupa continua contorno): colorido, ou levemente colorido numa peça grande e colorida
+            if (thick[i] ? (chroma > 30 || lum[i] > lineLum + 60 || (paintThick[lt[i]] && chroma > 14)) : (chroma > 40 && lum[i] > lineLum + 20)) line[i] = 0;
+          }
+          removeSmall(line, w, h, minSpeck, true);
+        }
+      }
+    }
+  }
+
+  const dist = distanceTransform(line, w, h);
+  const skel = line.slice();
+  thin(skel, w, h);
+  // objetos (componentes do contorno) e separação de letras/números
+  const mDraw = new Uint8Array(N), mText = new Uint8Array(N);
+  for (let i = 0; i < N; i++) if (line[i]) { if (textPix[i]) mText[i] = 1; else mDraw[i] = 1; }
+  const LD = labelComps(mDraw, w, h), LT = labelComps(mText, w, h);
+  const off = LD.comps.length;
+  const comps = LD.comps.concat(LT.comps.map(c => ({ ...c, id: c.id + off })));
+  const compLabel = new Int32Array(N).fill(-1);
+  for (let i = 0; i < N; i++) compLabel[i] = mDraw[i] ? LD.label[i] : (mText[i] ? LT.label[i] + off : -1);
+  for (const c of comps) c.px = [];
+  for (let i = 0; i < N; i++) if (skel[i] && compLabel[i] >= 0) comps[compLabel[i]].px.push(i);
+  const isText = new Uint8Array(comps.length);
+  for (let k = off; k < comps.length; k++) isText[k] = 1;
+  // fragmentos pequenos dentro da área de uma palavra também são texto
+  const tb = comps.filter(c => isText[c.id]).map(c => { const ch = c.y1 - c.y0 + 1, m = ch * 0.3; return [c.x0 - m, c.y0 - m, c.x1 + m, c.y1 + ch * 0.1]; });
+  for (const c of comps) if (!isText[c.id] && c.area < N * 0.002 && tb.some(b => c.x0 >= b[0] && c.x1 <= b[2] && c.y0 >= b[1] && c.y1 <= b[3])) isText[c.id] = 1;
+  const textComps = comps.filter(c => isText[c.id] && c.px.length), drawComps = comps.filter(c => !isText[c.id] && c.px.length);
+  const skelText = new Uint8Array(N), skelDraw = new Uint8Array(N);
+  for (const c of textComps) for (const i of c.px) skelText[i] = 1;
+  for (const c of drawComps) for (const i of c.px) skelDraw[i] = 1;
+  const objects = opt.order === 'left' ? objectOrder(drawComps, N) : null;
+  const sDraw = traceStrokes(skelDraw, dist, w, h, opt.order, objects ? objects.map(o => o.px) : null);
+  // palavras numa peça só são fatiadas em "letras" (colunas da largura de uma letra), da esquerda para a direita
+  const textGroupsList = [];
+  for (const c of readingOrder(textComps)) {
+    const ch = c.y1 - c.y0 + 1, cw = c.x1 - c.x0 + 1, lw = Math.max(4, ch * 0.7);
+    if (cw <= ch * 1.3) { textGroupsList.push(c.px); continue; }
+    const n = Math.max(1, Math.round(cw / lw)), slices = Array.from({ length: n }, () => []);
+    for (const i of c.px) { const x = i % w; slices[Math.min(n - 1, Math.floor((x - c.x0) / (cw / n)))].push(i); }
+    for (const sl of slices) if (sl.length) textGroupsList.push(sl);
+  }
+  const sText = traceStrokes(skelText, dist, w, h, 'text', textGroupsList);
+  const strokes = joinStrokes(sDraw, sText);
+
+  // camada do contorno = pixels do traço + 2 px ao redor (antisserrilhado)
+  const lineD = dilate(dilate(line, w, h), w, h);
+
+  // áreas de pintura
+  const fill = new Uint8Array(N), lightIn = new Uint8Array(N);
+  // dentro das palavras soltas, até o branco das letras (quase cor de fundo) é pintura, para a letra não ficar com buraco
+  const inFreeText = new Uint8Array(N);
+  for (const [x0, y0, x1, y1] of (S.freeWords || [])) { const m = (y1 - y0) * 0.1;
+    for (let y = Math.max(1, Math.floor(y0 - m)); y <= Math.min(h - 2, Math.ceil(y1 + m)); y++) for (let x = Math.max(1, Math.floor(x0 - m)); x <= Math.min(w - 2, Math.ceil(x1 + m)); x++) inFreeText[y * w + x] = 1; }
+  const tol2 = opt.tol * opt.tol;
+  for (let y = 1; y < h - 1; y++) for (let x = 1; x < w - 1; x++) {
+    const i = y * w + x;
+    if (line[i]) continue;
+    const dr = d[4*i] - bg[0], dg = d[4*i+1] - bg[1], db = d[4*i+2] - bg[2];
+    const cd = dr*dr + dg*dg + db*db;
+    if (cd > tol2) fill[i] = 1;
+    else if (inFreeText[i] && cd > 18 * 18 && lum[i] > bgLum + 5 && !line[i]) lightIn[i] = 1;
+  }
+  {
+    const LC = labelComps(lightIn, w, h), touches = new Uint8Array(LC.comps.length);
+    for (let i = 0; i < N; i++) { const k = LC.label[i]; if (k < 0 || touches[k]) continue;
+      if (!inFreeText[i - 1] || !inFreeText[i + 1] || !inFreeText[i - w] || !inFreeText[i + w]) touches[k] = 1; }
+    for (let i = 0; i < N; i++) { const k = LC.label[i]; if (k >= 0 && !touches[k]) fill[i] = 1; }
+  }
+  const owned = new Uint8Array(N);
+  // áreas de pintura que pertencem a letras/números (inteiras dentro de uma letra ou da caixa da palavra) ficam para o fim
+  const tBoxes = textComps.map(c => { const ch = c.y1 - c.y0 + 1, m = Math.max(2, ch * 0.08); return [c.x0 - m, c.y0 - m, c.x1 + m, c.y1 + m]; });
+  const rBoxes = textRows.map(r => { const rh = r[3] - r[1] + 1, m = rh * 0.3; return [r[0] - m, r[1] - m, r[2] + m, r[3] + rh * 0.15]; });
+  const within = (r, b) => r.x0 >= b[0] && r.x1 <= b[2] && r.y0 >= b[1] && r.y1 <= b[3];
+  const regIsText = r => {
+    if (r.px) { let k = 0; for (const i of r.px) if (zone[i]) k++; if (k / r.px.length > 0.6) return true; }
+    return tBoxes.some(b => within(r, b)) || rBoxes.some(b => within(r, b));
+  };
+  // só o "branco das letras" (mais claro que o fundo) forma áreas separadas dentro da caixa da palavra;
+  // roupa/desenho que entra na caixa continua junto com o resto do desenho
+  const zone = new Uint8Array(N);
+  for (let i = 0; i < N; i++) if (inFreeText[i] && lum[i] > bgLum + 5) zone[i] = 1;
+  const allRegions = buildRegions(fill, lineD, owned, d, w, h, opt.order, opt.doFill, regIsText, zone);
+  let drawRegs = allRegions.filter(r => !r.isText), textRegs = allRegions.filter(r => r.isText);
+  if (objects) drawRegs = orderRegionsByObjects(drawRegs, objects);
+  // bordas finas das letras (antisserrilhado colorido) aparecem junto com o traço da letra, não numa pintura à parte
+  textRegs = textRegs.filter(r => {
+    if (r.keep || r.nearFrac < 0.7) return true;
+    const a = r.layer.getContext('2d').getImageData(0, 0, r.bw, r.bh).data;
+    for (let y = 0; y < r.bh; y++) for (let x = 0; x < r.bw; x++) if (a[4 * (y * r.bw + x) + 3]) owned[(r.y + y) * w + r.x + x] = 0;
+    return false;
+  });
+  textRegs = readingOrder(textRegs);
+  const regions = drawRegs.concat(textRegs);
+
+  // pixels junto ao traço que não pertencem a nenhuma área pintada vão com o contorno
+  const lineImg = new ImageData(w, h);
+  for (let i = 0; i < N; i++) if (lineD[i] && !owned[i] && (line[i] || lum[i] < bgLum - 12)) {
+    lineImg.data[4*i] = d[4*i]; lineImg.data[4*i+1] = d[4*i+1]; lineImg.data[4*i+2] = d[4*i+2]; lineImg.data[4*i+3] = d[4*i+3];
+  }
+  const lineLayer = mkCanvas(w, h); lineLayer.getContext('2d').putImageData(lineImg, 0, 0);
+
+  return { w, h, bg, bgLum, line, fill, strokes, lineLayer, regions, nDrawRegions: drawRegs.length, nTextComps: textComps.length };
+}
+
+function removeSmall(m, w, h, minA, eight) {
+  const N = w * h, seen = new Uint8Array(N), stack = new Int32Array(N), comp = [];
+  const offs = eight ? [-w-1, -w, -w+1, -1, 1, w-1, w, w+1] : [-w, -1, 1, w];
+  for (let s = 0; s < N; s++) {
+    if (!m[s] || seen[s]) continue;
+    let sp = 0; stack[sp++] = s; seen[s] = 1; comp.length = 0;
+    while (sp) { const i = stack[--sp]; comp.push(i);
+      for (const o of offs) { const j = i + o; if (m[j] && !seen[j]) { seen[j] = 1; stack[sp++] = j; } } }
+    if (comp.length < minA) for (const i of comp) m[i] = 0;
+  }
+}
+
+function distanceTransform(m, w, h) {
+  const N = w * h, D = new Float32Array(N), S = 1.4142;
+  for (let i = 0; i < N; i++) D[i] = m[i] ? 1e9 : 0;
+  for (let y = 1; y < h - 1; y++) for (let x = 1; x < w - 1; x++) {
+    const i = y * w + x; if (!D[i]) continue;
+    D[i] = Math.min(D[i], D[i-1] + 1, D[i-w] + 1, D[i-w-1] + S, D[i-w+1] + S);
+  }
+  for (let y = h - 2; y > 0; y--) for (let x = w - 2; x > 0; x--) {
+    const i = y * w + x; if (!D[i]) continue;
+    D[i] = Math.min(D[i], D[i+1] + 1, D[i+w] + 1, D[i+w+1] + S, D[i+w-1] + S);
+  }
+  return D;
+}
+
+function dilate(m, w, h) {
+  const o = m.slice();
+  for (let y = 1; y < h - 1; y++) for (let x = 1; x < w - 1; x++) {
+    const i = y * w + x; if (m[i]) continue;
+    if (m[i-1] || m[i+1] || m[i-w] || m[i+w] || m[i-w-1] || m[i-w+1] || m[i+w-1] || m[i+w+1]) o[i] = 1;
+  }
+  return o;
+}
+
+// afinamento de Zhang-Suen (esqueleto com 1 px de largura)
+function thin(img, w, h) {
+  let list = []; for (let i = 0; i < img.length; i++) if (img[i]) list.push(i);
+  const del = [];
+  let changed = true;
+  while (changed) {
+    changed = false;
+    for (let pass = 0; pass < 2; pass++) {
+      del.length = 0;
+      for (let k = 0; k < list.length; k++) {
+        const i = list[k]; if (!img[i]) continue;
+        const p2 = img[i-w], p3 = img[i-w+1], p4 = img[i+1], p5 = img[i+w+1], p6 = img[i+w], p7 = img[i+w-1], p8 = img[i-1], p9 = img[i-w-1];
+        const B = p2+p3+p4+p5+p6+p7+p8+p9; if (B < 2 || B > 6) continue;
+        const A = (!p2 && p3 ? 1 : 0) + (!p3 && p4 ? 1 : 0) + (!p4 && p5 ? 1 : 0) + (!p5 && p6 ? 1 : 0) + (!p6 && p7 ? 1 : 0) + (!p7 && p8 ? 1 : 0) + (!p8 && p9 ? 1 : 0) + (!p9 && p2 ? 1 : 0);
+        if (A !== 1) continue;
+        if (pass === 0) { if (p2 && p4 && p6) continue; if (p4 && p6 && p8) continue; }
+        else { if (p2 && p4 && p8) continue; if (p2 && p6 && p8) continue; }
+        del.push(i);
+      }
+      if (del.length) { changed = true; for (const i of del) img[i] = 0; }
+    }
+    list = list.filter(i => img[i]);
+  }
+}
+
+// transforma o esqueleto em traços ordenados, como uma caneta percorreria
+function traceStrokes(skel, dist, w, h, order, groups) {
+  const OFF = [-w-1, -w, -w+1, -1, 1, w-1, w, w+1];
+  const DX = [-1, 0, 1, -1, 1, -1, 0, 1], DY = [-1, -1, -1, 0, 0, 1, 1, 1];
+  const pts = []; for (let i = 0; i < skel.length; i++) if (skel[i]) pts.push(i);
+  const band = Math.max(10, h * 0.06);
+  const flat = [], cum = [], strokeStarts = [];
+  let total = 0, ptr = 0, pen = null;
+
+  const pick = (cur, dx, dy, avoid, yLim) => {
+    let best = -1, bs = -1e9;
+    for (let k = 0; k < 8; k++) {
+      const j = cur + OFF[k]; if (!skel[j] || (avoid && avoid.has(j))) continue;
+      if (yLim !== undefined && ((j / w) | 0) > yLim) continue;
+      const len = (DX[k] && DY[k]) ? 1.4142 : 1;
+      let s = (dx * DX[k] + dy * DY[k]) / len;
+      if (len === 1) s += 0.15;
+      if (s > bs) { bs = s; best = k; }
+    }
+    return best;
+  };
+  const yOf = i => (i / w) | 0;
+  const findEnd = (s, yLim) => {
+    let n = 0; for (let k = 0; k < 8; k++) if (skel[s + OFF[k]]) n++;
+    if (n <= 1) return s;
+    const seen = new Set([s]); let cur = s, dx = 0, dy = 0;
+    for (let guard = 0; guard < 200000; guard++) {
+      const k = pick(cur, dx, dy, seen, yLim); if (k < 0) break;
+      dx = dx * 0.6 + DX[k] * 0.4; dy = dy * 0.6 + DY[k] * 0.4;
+      cur += OFF[k]; seen.add(cur);
+    }
+    return cur;
+  };
+
+  const runFrom = (start, yLim) => {
+    start = findEnd(start, yLim);
+    if (pen) { const sy = (start / w) | 0, sx = start - sy * w; total += Math.hypot(sx - pen[0], sy - pen[1]) * TUNE.travel; }
+    strokeStarts.push(flat.length / 3);
+    let cur = start, dx = 0, dy = 0;
+    skel[cur] = 0;
+    const push = i => { const y = (i / w) | 0, x = i - y * w; flat.push(x + 0.5, y + 0.5, dist[i] + 2.6); cum.push(total); };
+    push(cur);
+    while (true) {
+      const k = pick(cur, dx, dy, null, yLim); if (k < 0) break;
+      const nxt = cur + OFF[k];
+      // limpa "degraus" do esqueleto vizinhos ao passo (evita micro-traços)
+      for (let q = 0; q < 8; q++) {
+        const j = cur + OFF[q]; if (j === nxt || !skel[j]) continue;
+        const jy = (j / w) | 0, jx = j - jy * w, ny = (nxt / w) | 0, nx = nxt - ny * w;
+        if (Math.abs(jx - nx) <= 1 && Math.abs(jy - ny) <= 1 && (q === 1 || q === 3 || q === 4 || q === 6)) skel[j] = 0;
+      }
+      total += (DX[k] && DY[k]) ? 1.4142 : 1;
+      dx = dx * 0.6 + DX[k] * 0.4; dy = dy * 0.6 + DY[k] * 0.4;
+      skel[nxt] = 0; cur = nxt; push(cur);
+    }
+    const ly = (cur / w) | 0; pen = [cur - ly * w, ly];
+  };
+
+  if (groups) {
+    // texto: cada grupo é uma letra/número, já na ordem de leitura
+    // cada grupo (objeto ou letra) é traçado de cima para baixo: uma faixa desce pelo grupo
+    // e, dentro dela, a caneta vai para o traço mais próximo de onde está
+    for (const g0 of groups) {
+      const g = Int32Array.from(g0).sort();
+      if (!g.length) continue;
+      const gy0 = (g[0] / w) | 0, gy1 = (g[g.length - 1] / w) | 0;
+      // letras: a caneta segue cada traço inteiro (perna por perna); desenhos: faixa que desce
+      const gb = order === 'text' ? 1e9 : Math.max(8, (gy1 - gy0) * 0.08);
+      let gp = 0, firstInGroup = true;
+      while (true) {
+        while (gp < g.length && !skel[g[gp]]) gp++;
+        if (gp >= g.length) break;
+        const yTop = (g[gp] / w) | 0, yL = yTop + gb;
+        let start = -1, best = Infinity;
+        for (let k = gp; k < g.length; k++) {
+          const i = g[k], y = (i / w) | 0; if (y > yL) break; if (!skel[i]) continue;
+          const x = i - y * w;
+          const score = firstInGroup || !pen ? (order === 'text' ? x + y * 0.6 : x) : (x - pen[0]) ** 2 + (y - pen[1]) ** 2;
+          if (score < best) { best = score; start = i; }
+        }
+        firstInGroup = false;
+        runFrom(start, order === 'text' ? undefined : yL);
+      }
+    }
+  }
+
+  while (true) {
+    while (ptr < pts.length && !skel[pts[ptr]]) ptr++;
+    if (ptr >= pts.length) break;
+    let start = pts[ptr];
+    // modo "de cima para baixo": a caneta só trabalha numa faixa que desce pela imagem
+    const yLim = order === 'top' ? yOf(pts[ptr]) + band : undefined;
+    if (pen) {
+      let bestD = Infinity;
+      if (order === 'top') {
+        for (let k = ptr; k < pts.length; k++) {
+          const i = pts[k], y = (i / w) | 0; if (y > yLim) break; if (!skel[i]) continue;
+          const x = i - y * w, dd = (x - pen[0]) ** 2 + (y - pen[1]) ** 2;
+          if (dd < bestD) { bestD = dd; start = i; }
+        }
+      } else {
+        for (let k = ptr; k < pts.length; k++) {
+          const i = pts[k]; if (!skel[i]) continue;
+          const y = (i / w) | 0, x = i - y * w, dd = (x - pen[0]) ** 2 + (y - pen[1]) ** 2;
+          if (dd < bestD) { bestD = dd; start = i; }
+        }
+      }
+    }
+    runFrom(start, yLim);
+  }
+  return { pts: new Float32Array(flat), cum: new Float64Array(cum), total, count: strokeStarts.length };
+}
+
+// ordem de leitura: agrupa itens em linhas (sobreposição vertical) e ordena da esquerda para a direita.
+// itens pequenos (pingos, acentos, pontuação) entram logo depois do item grande que fica embaixo/ao lado.
+function readingOrder(items) {
+  if (!items.length) return [];
+  const hs = items.map(c => c.y1 - c.y0 + 1).sort((a, b) => a - b), as = items.map(c => c.area).sort((a, b) => a - b);
+  const medH = hs[hs.length >> 1], medA = as[as.length >> 1];
+  const isSmall = c => c.area < medA * 0.3 && (c.y1 - c.y0 + 1) < medH * 0.6;
+  const big = items.filter(c => !isSmall(c)), small = items.filter(isSmall);
+  big.sort((a, b) => (a.y0 + a.y1) - (b.y0 + b.y1));
+  const rows = [];
+  for (const c of big) {
+    let row = null;
+    for (const r of rows) {
+      const ov = Math.min(r.y1, c.y1) - Math.max(r.y0, c.y0);
+      if (ov > 0.45 * Math.min(r.y1 - r.y0 + 1, c.y1 - c.y0 + 1)) { row = r; break; }
+    }
+    if (!row) { row = { y0: c.y0, y1: c.y1, items: [] }; rows.push(row); }
+    row.items.push(c); row.y0 = Math.min(row.y0, c.y0); row.y1 = Math.max(row.y1, c.y1);
+  }
+  rows.sort((a, b) => a.y0 - b.y0);
+  for (const r of rows) r.items.sort((a, b) => a.x0 - b.x0);
+  // anexa os pequenos ao item grande mais próximo
+  const after = new Map();
+  for (const c of small) {
+    const cx = (c.x0 + c.x1) / 2, cy = (c.y0 + c.y1) / 2;
+    let best = null, bd = Infinity;
+    for (const b of big) {
+      const dx = cx < b.x0 ? b.x0 - cx : cx > b.x1 ? cx - b.x1 : 0, dy = cy < b.y0 ? b.y0 - cy : cy > b.y1 ? cy - b.y1 : 0;
+      const dd = dx * dx * 2 + dy * dy; if (dd < bd) { bd = dd; best = b; }
+    }
+    if (!after.has(best)) after.set(best, []); after.get(best).push(c);
+  }
+  const out = [];
+  for (const r of rows) for (const c of r.items) { out.push(c); const extra = after.get(c); if (extra) out.push(...extra.sort((a, b) => a.x0 - b.x0)); }
+  return out;
+}
+
+function labelComps(m, w, h) {
+  const N = w * h, label = new Int32Array(N).fill(-1), stack = new Int32Array(N), comps = [];
+  const offs = [-w-1, -w, -w+1, -1, 1, w-1, w, w+1];
+  for (let s = 0; s < N; s++) {
+    if (!m[s] || label[s] !== -1) continue;
+    const id = comps.length; let sp = 0; stack[sp++] = s; label[s] = id;
+    let x0 = w, y0 = h, x1 = 0, y1 = 0, area = 0;
+    while (sp) {
+      const i = stack[--sp]; area++;
+      const y = (i / w) | 0, x = i - y * w;
+      if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y;
+      for (const o of offs) { const j = i + o; if (m[j] && label[j] === -1) { label[j] = id; stack[sp++] = j; } }
+    }
+    comps.push({ id, x0, y0, x1, y1, area });
+  }
+  return { label, comps };
+}
+
+// letras/números: peças de tamanho parecido, alinhadas em fileira horizontal (3 ou mais seguidas)
+function detectText(comps, w, h, lineMask, labelArr) {
+  const wordComps = [];
+  const isT = new Uint8Array(comps.length);
+  const cand = comps.filter(c => {
+    const ch = c.y1 - c.y0 + 1, cw = c.x1 - c.x0 + 1, fillRatio = c.area / (cw * ch);
+    return ch >= Math.max(9, h * 0.03) && ch <= h * 0.22 && cw <= ch * 3.2 && fillRatio > 0.06 && fillRatio < 0.92;
+  }).sort((a, b) => a.x0 - b.x0);
+  // "cara de palavra": peça larga cortada por muitas hastes verticais (letras encostadas, contorno grosso ou sombra)
+  const runsOf = c => {
+    if (!lineMask) return 0;
+    const ch = c.y1 - c.y0 + 1; let runs = 0;
+    for (const fy of [0.35, 0.5, 0.65]) {
+      const y = Math.round(c.y0 + ch * fy); let r = 0, inside = false;
+      for (let x = c.x0; x <= c.x1; x++) { const on = lineMask[y * w + x] === 1 && labelArr[y * w + x] === c.id; if (on && !inside) r++; inside = on; }
+      runs = Math.max(runs, r);
+    }
+    return runs;
+  };
+  const wordy = c => { const ch = c.y1 - c.y0 + 1, cw = c.x1 - c.x0 + 1, fr = c.area / (cw * ch);
+    return cw >= 2 * ch && fr > 0.12 && fr < 0.8 && ch >= Math.max(9, h * 0.03) && ch <= h * 0.25 && runsOf(c) >= Math.max(4, 1.1 * cw / ch); };
+  for (const c of comps) { const ch = c.y1 - c.y0 + 1, cw = c.x1 - c.x0 + 1; if (cw >= 2.2 * ch && ch >= Math.max(14, h * 0.03) && wordy(c)) wordComps.push(c); }
+  const parent = new Map(cand.map(c => [c, c]));
+  const find = c => { while (parent.get(c) !== c) { parent.set(c, parent.get(parent.get(c))); c = parent.get(c); } return c; };
+  for (let i = 0; i < cand.length; i++) {
+    const a = cand[i], ha = a.y1 - a.y0 + 1;
+    for (let j = i + 1; j < cand.length; j++) {
+      const b = cand[j], hb = b.y1 - b.y0 + 1, hm = Math.max(ha, hb);
+      if (b.x0 - a.x1 > hm * 1.1) break;
+      if (Math.max(ha, hb) / Math.min(ha, hb) > 1.7) continue;
+      const ov = Math.min(a.y1, b.y1) - Math.max(a.y0, b.y0);
+      if (ov < 0.55 * Math.min(ha, hb)) continue;
+      if (Math.abs(a.y1 - b.y1) > 0.35 * hm && Math.abs(a.y0 - b.y0) > 0.35 * hm) continue;
+      parent.set(find(a), find(b));
+    }
+  }
+  const groups = new Map();
+  for (const c of cand) { const r = find(c); if (!groups.has(r)) groups.set(r, []); groups.get(r).push(c); }
+  for (const c of wordComps) if (!cand.includes(c)) groups.set(c, [c]);
+  const rows = [];
+  for (const g of groups.values()) if (g.length >= 3 || (g.length === 2 && (wordy(g[0]) || wordy(g[1]))) || (g.length === 1 && wordComps.includes(g[0]))) {
+    for (const c of g) isT[c.id] = 1;
+    rows.push([Math.min(...g.map(c => c.x0)), Math.min(...g.map(c => c.y0)), Math.max(...g.map(c => c.x1)), Math.max(...g.map(c => c.y1))]);
+  }
+  // pingos, acentos, pontuação e símbolos: encostados numa fileira de texto, ou entre duas palavras da mesma linha
+  for (const c of comps) {
+    if (isT[c.id]) continue;
+    const chh = c.y1 - c.y0 + 1, cww = c.x1 - c.x0 + 1;
+    const sameLine = r => { const rh = r[3] - r[1] + 1; return c.y0 >= r[1] - rh * 0.4 && c.y1 <= r[3] + rh * 0.15 && chh <= rh * 1.3 && cww <= rh * 3; };
+    let ok = rows.some(r => { const mx = (r[3] - r[1] + 1) * 0.5; return sameLine(r) && c.x1 >= r[0] - mx && c.x0 <= r[2] + mx; });
+    if (!ok) {
+      const left = rows.some(r => sameLine(r) && r[2] <= c.x0 && c.x0 - r[2] < (r[3] - r[1] + 1) * 2);
+      const right = rows.some(r => sameLine(r) && r[0] >= c.x1 && r[0] - c.x1 < (r[3] - r[1] + 1) * 2);
+      ok = left && right;
+    }
+    if (ok) isT[c.id] = 1;
+  }
+  isT.rows = rows;
+  return isT;
+}
+
+// desenho: objetos (peças grandes do contorno) da esquerda para a direita; peças pequenas vão com o objeto mais próximo
+function objectOrder(comps, N) {
+  if (!comps.length) return [];
+  const maxA = Math.max(...comps.map(c => c.area));
+  const thr = Math.min(maxA, Math.max(N * 0.0008, maxA * 0.02));
+  const big = comps.filter(c => c.area >= thr).sort((a, b) => (a.x0 - b.x0) || (a.y0 - b.y0));
+  const objs = big.map(b => ({ x0: b.x0, y0: b.y0, x1: b.x1, y1: b.y1, area: (b.x1 - b.x0 + 1) * (b.y1 - b.y0 + 1), px: b.px.slice() }));
+  const gap = (c, o) => { const dx = c.x1 < o.x0 ? o.x0 - c.x1 : c.x0 > o.x1 ? c.x0 - o.x1 : 0, dy = c.y1 < o.y0 ? o.y0 - c.y1 : c.y0 > o.y1 ? c.y0 - o.y1 : 0; return dx * dx + dy * dy; };
+  for (const c of comps) {
+    if (c.area >= thr) continue;
+    let best = objs[0], bd = Infinity, ba = Infinity;
+    for (const o of objs) { const g = gap(c, o); if (g < bd || (g === bd && o.area < ba)) { bd = g; ba = o.area; best = o; } }
+    for (const i of c.px) best.px.push(i);
+  }
+  return objs;
+}
+
+// pintura no modo objeto: cada área vai com o objeto que a contém; dentro do objeto, a mão segue a área mais próxima
+function orderRegionsByObjects(regs, objs) {
+  if (!objs.length) return regs.slice().sort((a, b) => a.x0 - b.x0);
+  const buckets = objs.map(() => []);
+  for (const r of regs) {
+    const cx = r.x + r.bw / 2, cy = r.y + r.bh / 2;
+    let best = -1, ba = Infinity;
+    objs.forEach((o, k) => { if (cx >= o.x0 && cx <= o.x1 && cy >= o.y0 && cy <= o.y1 && o.area < ba) { ba = o.area; best = k; } });
+    if (best < 0) { let bd = Infinity; objs.forEach((o, k) => { const dx = Math.max(o.x0 - cx, 0, cx - o.x1), dy = Math.max(o.y0 - cy, 0, cy - o.y1), dd = dx * dx + dy * dy; if (dd < bd) { bd = dd; best = k; } }); }
+    buckets[best].push(r);
+  }
+  const out = [];
+  let pen = null;
+  buckets.forEach((b, k) => { out.push(...topDown(b, objs[k].y1 - objs[k].y0, pen)); if (out.length) { const r = out[out.length - 1]; pen = [r.x + r.bw / 2, r.y + r.bh / 2]; } });
+  return out;
+}
+
+// ordena áreas de cima para baixo: faixa que desce; dentro da faixa, a área mais próxima da anterior
+function topDown(regs, height, pen) {
+  if (!regs.length) return [];
+  const top = Math.min(...regs.map(r => r.y0)), band = Math.max(10, height * 0.12);
+  const rows = new Map();
+  for (const r of regs) { const k = Math.floor((r.y0 + Math.min(r.bh, band) / 2 - top) / band); if (!rows.has(k)) rows.set(k, []); rows.get(k).push(r); }
+  const out = []; let dir = 1;
+  for (const k of [...rows.keys()].sort((a, b) => a - b)) {
+    const row = rows.get(k).sort((a, b) => dir * ((a.x0 + a.x1) - (b.x0 + b.x1)));
+    out.push(...row); dir = -dir;
+  }
+  return out;
+}
+
+// junta os traços do desenho com os do texto (texto depois)
+function joinStrokes(a, b) {
+  const pts = new Float32Array(a.pts.length + b.pts.length); pts.set(a.pts, 0); pts.set(b.pts, a.pts.length);
+  const cum = new Float64Array(a.cum.length + b.cum.length); cum.set(a.cum, 0);
+  for (let i = 0; i < b.cum.length; i++) cum[a.cum.length + i] = a.total + 0.01 + b.cum[i];
+  return { pts, cum, total: a.total + (b.cum.length ? 0.01 + b.total : 0), count: a.count + b.count, splitLen: a.total, splitIdx: a.cum.length };
+}
+
+// texto: um grupo de pixels do esqueleto por letra/número, na ordem de leitura
+function textGroups(line, skel, w, h) {
+  const N = w * h, label = new Int32Array(N).fill(-1), stack = new Int32Array(N), comps = [];
+  const offs = [-w-1, -w, -w+1, -1, 1, w-1, w, w+1];
+  for (let s = 0; s < N; s++) {
+    if (!line[s] || label[s] !== -1) continue;
+    const id = comps.length; let sp = 0; stack[sp++] = s; label[s] = id;
+    let x0 = w, y0 = h, x1 = 0, y1 = 0, area = 0;
+    while (sp) {
+      const i = stack[--sp]; area++;
+      const y = (i / w) | 0, x = i - y * w;
+      if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y;
+      for (const o of offs) { const j = i + o; if (line[j] && label[j] === -1) { label[j] = id; stack[sp++] = j; } }
+    }
+    comps.push({ id, x0, y0, x1, y1, area, px: [] });
+  }
+  for (let i = 0; i < N; i++) if (skel[i] && label[i] >= 0) comps[label[i]].px.push(i);
+  return readingOrder(comps.filter(c => c.px.length)).map(c => c.px);
+}
+
+// regiões de pintura: componentes conexos + percurso de pincel em zigue-zague
+function buildRegions(fill, lineD, owned, d, w, h, order, doFill, keepAll, zone) {
+  const N = w * h, label = new Int32Array(N).fill(-1), stack = new Int32Array(N);
+  const minA = Math.max(40, Math.round(N * 3e-5));
+  const regs = [];
+  for (let s = 0; s < N; s++) {
+    if (!fill[s] || label[s] !== -1) continue;
+    const id = regs.length; let sp = 0; stack[sp++] = s; label[s] = id;
+    const px = [];
+    let x0 = w, y0 = h, x1 = 0, y1 = 0;
+    while (sp) {
+      const i = stack[--sp]; px.push(i);
+      const y = (i / w) | 0, x = i - y * w;
+      if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y;
+      const nb = [i - w, i + w, i - 1, i + 1];
+      for (const j of nb) if (fill[j] && label[j] === -1 && (!zone || zone[j] === zone[i])) { label[j] = id; stack[sp++] = j; }
+    }
+    regs.push({ px, x0, y0, x1, y1 });
+  }
+  // descarta áreas pequenas e "halos" finos ao redor do traço (antisserrilhado)
+  let out = !doFill ? [] : regs.filter(r => {
+    r.isText = !!(keepAll && keepAll(r));
+    let near = 0, chroma = 0, zn = 0;
+    for (const i of r.px) { if (lineD[i]) near++; if (zone && zone[i]) zn++; chroma += Math.max(d[4*i], d[4*i+1], d[4*i+2]) - Math.min(d[4*i], d[4*i+1], d[4*i+2]); }
+    r.nearFrac = near / r.px.length;
+    // dentro das letras: o miolo (ex.: branco da letra) é pintado; a borda fina antisserrilhada sai junto com o traço
+    if (r.isText && r.px.length >= Math.max(30, minA * 0.5) && (r.nearFrac < 0.7 || zn / r.px.length > 0.5)) { r.keep = true; return true; }
+    if (r.px.length < minA) return false;
+    return r.nearFrac < 0.7 || chroma / r.px.length > 28;
+  });
+  for (const r of out) for (const i of r.px) owned[i] = 1;
+  if (order === 'near' && out.length) {
+    const rest = out.slice().sort((a, b) => a.y0 - b.y0), seq = [rest.shift()];
+    while (rest.length) {
+      const L = seq[seq.length - 1], cx = (L.x0 + L.x1) / 2, cy = (L.y0 + L.y1) / 2;
+      let bi = 0, bd = Infinity;
+      rest.forEach((r, k) => { const dd = ((r.x0 + r.x1) / 2 - cx) ** 2 + ((r.y0 + r.y1) / 2 - cy) ** 2; if (dd < bd) { bd = dd; bi = k; } });
+      seq.push(rest.splice(bi, 1)[0]);
+    }
+    out = seq;
+  } else if (order === 'text') {
+    out.forEach(r => { r.area = r.px.length; });
+    out = readingOrder(out);
+  } else out.sort((a, b) => (a.y0 - b.y0) || (a.x0 - b.x0));
+
+  // cada área vira uma ou mais "faixas" de pintura (áreas altas são pintadas em faixas que descem),
+  // com pincel do tamanho de uma caneta grossa; o caminho é um vaivém dentro do formato da área
+  const pieces = [];
+  const penW = Math.max(8, h * 0.02), bandH = Math.max(penW * 5, h * 0.07);
+  for (const r of out) {
+    const bw = r.x1 - r.x0 + 1, bh = r.y1 - r.y0 + 1;
+    const rowMin = new Int32Array(bh).fill(1e9), rowMax = new Int32Array(bh).fill(-1);
+    for (const i of r.px) { const y = (i / w) | 0, x = i - y * w, lx = x - r.x0, ly = y - r.y0; if (lx < rowMin[ly]) rowMin[ly] = lx; if (lx > rowMax[ly]) rowMax[ly] = lx; }
+    const brush = clamp(Math.sqrt(r.px.length) / 10, penW, penW * 2.2);
+    const nb = Math.max(1, Math.round(bh / bandH));
+    for (let b = 0; b < nb; b++) {
+      const py0 = Math.floor(b * bh / nb), py1 = Math.floor((b + 1) * bh / nb);    // linhas [py0, py1) da área
+      let pxMin = 1e9, pxMax = -1, cnt = 0;
+      for (let y = py0; y < py1; y++) if (rowMax[y] >= 0) { pxMin = Math.min(pxMin, rowMin[y]); pxMax = Math.max(pxMax, rowMax[y]); }
+      if (pxMax < 0) continue;
+      const pw = pxMax - pxMin + 1, ph = py1 - py0;
+      const img = new ImageData(pw, ph);
+      for (const i of r.px) { const y = (i / w) | 0, x = i - y * w, lx = x - r.x0, ly = y - r.y0;
+        if (ly < py0 || ly >= py1) continue; const o = 4 * ((ly - py0) * pw + (lx - pxMin)); cnt++;
+        img.data[o] = d[4*i]; img.data[o+1] = d[4*i+1]; img.data[o+2] = d[4*i+2]; img.data[o+3] = d[4*i+3]; }
+      const layer = mkCanvas(pw, ph); layer.getContext('2d').putImageData(img, 0, 0);
+      const spacing = brush * 0.6, path = [];
+      let dir = 1;
+      for (let cy = spacing / 2; cy < ph + spacing / 2; cy += spacing) {
+        let mn = 1e9, mx = -1;
+        for (let y = Math.max(0, Math.floor(cy - spacing / 2)); y <= Math.min(ph - 1, Math.ceil(cy + spacing / 2)); y++) {
+          const ry = py0 + y; if (rowMax[ry] >= 0) { mn = Math.min(mn, rowMin[ry] - pxMin); mx = Math.max(mx, rowMax[ry] - pxMin); } }
+        if (mx < 0) continue;
+        const a = dir > 0 ? mn : mx, bb = dir > 0 ? mx : mn, segs = Math.max(1, Math.ceil(Math.abs(bb - a) / 20));
+        for (let k = 0; k <= segs; k++) { const t = k / segs; path.push(a + (bb - a) * t, Math.min(ph, cy) + Math.sin((t * 3 + cy * 0.05) * Math.PI) * spacing * 0.12); }
+        dir = -dir;
+      }
+      if (!path.length) continue;
+      const cum = [0];
+      for (let k = 2; k < path.length; k += 2) cum.push(cum[cum.length - 1] + Math.hypot(path[k] - path[k-2], path[k+1] - path[k-1]));
+      const X = r.x0 + pxMin, Y = r.y0 + py0;
+      pieces.push({ isText: !!r.isText, nearFrac: r.nearFrac, keep: !!r.keep, regArea: r.px.length, x: X, y: Y, x0: X, y0: Y, x1: X + pw - 1, y1: Y + ph - 1, bw: pw, bh: ph, layer, brush, path: new Float32Array(path), cum: new Float64Array(cum), len: cum[cum.length - 1] || 1, area: cnt });
+    }
+  }
+  return pieces;
+}
+
+/* ================= animação ================= */
+class Animator {
+  constructor(A, L, orig, opt) {
+    this.A = A; this.L = L; this.orig = orig;
+    this.canvas = mkCanvas(L.W, L.H); this.ctx = this.canvas.getContext('2d');
+    this.lineMask = mkCanvas(A.w, A.h); this.lmCtx = this.lineMask.getContext('2d');
+    this.lineTmp = mkCanvas(A.w, A.h); this.ltCtx = this.lineTmp.getContext('2d');
+    this.fillDone = mkCanvas(A.w, A.h); this.fdCtx = this.fillDone.getContext('2d');
+    this.regTmp = mkCanvas(1, 1); this.rtCtx = this.regTmp.getContext('2d');
+    this.regMask = mkCanvas(1, 1); this.rmCtx = this.regMask.getContext('2d');
+    this.bgCss = `rgb(${A.bg[0]},${A.bg[1]},${A.bg[2]})`;
+    this.setTiming(opt);
+  }
+  setTiming(opt) {
+    const A = this.A;
+    this.showHand = !!opt.showHand && HAND.naturalWidth > 0;
+    this.handScale = (opt.handSize || 0.35) * this.L.H / HAND_WRIST;
+    this.lead = this.showHand ? 0.8 : 0.3;
+    this.exit = this.showHand ? 0.8 : 0;
+    const S = A.strokes, R = A.regions, nD = A.nDrawRegions;
+    const Ld = S.splitLen, Lt = S.total - Ld;
+    const rw = R.map(r => Math.pow(r.len, 0.85));
+    const wD = R.slice(0, nD).reduce((a, r) => a + r.len, 0), wT = R.slice(nD).reduce((a, r) => a + r.len, 0);
+    const share = (a, b) => a > 0 && b > 0 ? clamp(Math.pow(a, 0.7) / (Math.pow(a, 0.7) + Math.pow(b, 0.7)), 0.1, 0.85) : (a > 0 ? 1 : 0);
+    this.lineDur = S.total > 0 ? opt.lineDur : 0;
+    this.fillDur = R.length ? opt.fillDur : 0;
+    // pintura do desenho e do texto na mesma velocidade de pincel (proporcional ao caminho)
+    const lineD = this.lineDur * share(Ld, Lt), fillD = wD + wT > 0 ? (wT > 0 ? Math.min(this.fillDur * wD / (wD + wT), this.fillDur - Math.min(1.2, this.fillDur * 0.3)) : this.fillDur) : 0;
+    this.fade = 0.5;
+    this.hold = opt.hold;
+    this.tLine0 = this.lead;
+    let t = this.lead;
+    const ph = [];
+    ph.push({ type: 'line', t0: t, t1: (t += lineD), L0: 0, L1: Ld });
+    ph.push({ type: 'fill', t0: t, t1: (t += fillD), k0: 0, k1: nD });
+    ph.push({ type: 'line', t0: t, t1: (t += this.lineDur - lineD), L0: Ld, L1: S.total });
+    ph.push({ type: 'fill', t0: t, t1: (t += this.fillDur - fillD), k0: nD, k1: R.length });
+    this.phases = ph;
+    this.tLinesDone = ph[2].t1;
+    this.tFade0 = t;
+    this.total = this.tFade0 + Math.max(this.fade, this.exit) + this.hold;
+    // pintura: início/fim de cada área, viagem da mão entre áreas e tempo de cada área ∝ comprimento^0.75
+    this.regEnds = R.map(r => { const a = [r.x + r.path[0], r.y + r.path[1]], q = polyAt(r.path, r.cum, r.len); return [a, [r.x + q[0], r.y + q[1]]]; });
+    const diag = Math.hypot(A.w, A.h);
+    this.regT = new Array(R.length); this.regTravel = new Array(R.length);
+    for (const f of [ph[1], ph[3]]) {
+      if (f.k1 <= f.k0) continue;
+      const dur = f.t1 - f.t0;
+      const before = strokeAt(S.pts, S.cum, f === ph[1] ? Ld : S.total);
+      let travels = [];
+      for (let k = f.k0; k < f.k1; k++) {
+        const from = k > f.k0 ? this.regEnds[k - 1][1] : before;
+        if (!from || !this.showHand) { travels.push(0); continue; }
+        const to = this.regEnds[k][0]; travels.push(0.04 + 0.32 * Math.min(1, Math.hypot(to[0] - from[0], to[1] - from[1]) / (diag * 0.5)));
+      }
+      const tsum = travels.reduce((a, b) => a + b, 0);
+      if (tsum > dur * 0.4) travels = travels.map(v => v * dur * 0.4 / tsum);
+      const paint = dur - travels.reduce((a, b) => a + b, 0);
+      const sw = rw.slice(f.k0, f.k1).reduce((a, b) => a + b, 0) || 1;
+      let tt = f.t0;
+      for (let k = f.k0; k < f.k1; k++) {
+        const from = k > f.k0 ? this.regEnds[k - 1][1] : (before || this.regEnds[k][0]);
+        this.regTravel[k] = [tt, tt + travels[k - f.k0], from]; tt += travels[k - f.k0];
+        const st = tt; tt += paint * rw[k] / sw; this.regT[k] = [st, tt];
+      }
+    }
+    this.reset();
+  }
+  reset() {
+    this.lmCtx.clearRect(0, 0, this.A.w, this.A.h); this.fdCtx.clearRect(0, 0, this.A.w, this.A.h);
+    this.lineIdx = 0; this.regIdx = 0; this.regStarted = -1; this.regLen = 0; this.lastT = -1;
+    this.hand = null; this.handLast = null;
+  }
+  render(t) {
+    if (t < this.lastT) this.reset();
+    this.lastT = t;
+    const { A, L, ctx } = this;
+    ctx.globalCompositeOperation = 'source-over'; ctx.globalAlpha = 1;
+    ctx.fillStyle = this.bgCss; ctx.fillRect(0, 0, L.W, L.H);
+
+    // ---- pintura ----
+    let cur = null;
+    while (this.regIdx < A.regions.length && t >= this.regT[this.regIdx][1]) {
+      const r = A.regions[this.regIdx]; this.fdCtx.drawImage(r.layer, r.x, r.y);
+      this.regIdx++; this.regStarted = -1;
+    }
+    if (this.regIdx < A.regions.length && t >= this.regT[this.regIdx][0]) {
+      const r = A.regions[this.regIdx], [s, e] = this.regT[this.regIdx];
+      if (this.regStarted !== this.regIdx) {
+        this.regStarted = this.regIdx; this.regLen = 0;
+        this.regMask.width = r.bw; this.regMask.height = r.bh; this.regTmp.width = r.bw; this.regTmp.height = r.bh;
+        const m = this.rmCtx; m.lineCap = 'round'; m.lineJoin = 'round'; m.strokeStyle = '#000'; m.lineWidth = r.brush;
+      }
+      const target = r.len * clamp((t - s) / (e - s), 0, 1);
+      strokePolyline(this.rmCtx, r.path, r.cum, this.regLen, target); this.regLen = target;
+      const c = this.rtCtx; c.globalCompositeOperation = 'source-over'; c.clearRect(0, 0, r.bw, r.bh);
+      c.drawImage(this.regMask, 0, 0); c.globalCompositeOperation = 'source-in'; c.drawImage(r.layer, 0, 0);
+      c.globalCompositeOperation = 'source-over';
+      cur = r;
+    }
+    ctx.drawImage(this.fillDone, L.ox, L.oy);
+    if (cur) ctx.drawImage(this.regTmp, L.ox + cur.x, L.oy + cur.y);
+
+    // ---- contorno ----
+    if (this.lineDur > 0 && t < this.tLinesDone) {
+      const S = A.strokes, target = this.lineLenAt(t);
+      const P = S.pts, C = S.cum, m = this.lmCtx;
+      let i = this.lineIdx;
+      m.fillStyle = '#000'; m.beginPath();
+      while (i < C.length && C[i] <= target && t >= this.tLine0) {
+        const x = P[3*i], y = P[3*i+1], r = P[3*i+2];
+        m.moveTo(x + r, y); m.arc(x, y, r, 0, Math.PI * 2);
+        i++;
+      }
+      m.fill(); this.lineIdx = i;
+      const c = this.ltCtx; c.globalCompositeOperation = 'source-over'; c.clearRect(0, 0, A.w, A.h);
+      c.drawImage(this.lineMask, 0, 0); c.globalCompositeOperation = 'source-in'; c.drawImage(A.lineLayer, 0, 0);
+      c.globalCompositeOperation = 'source-over';
+      ctx.drawImage(this.lineTmp, L.ox, L.oy);
+    } else if (t >= this.tLinesDone) {
+      ctx.drawImage(A.lineLayer, L.ox, L.oy);
+    }
+
+    // ---- fecha com a imagem exata ----
+    if (t >= this.tFade0) {
+      ctx.globalAlpha = clamp((t - this.tFade0) / this.fade, 0, 1);
+      ctx.drawImage(this.orig, L.ox, L.oy);
+      ctx.globalAlpha = 1;
+    }
+    if (this.showHand) this.drawHand(t);
+    return this.canvas;
+  }
+  lineLenAt(t) {
+    let Lx = 0;
+    for (const f of this.phases) if (f.type === 'line') {
+      if (t >= f.t1) Lx = f.L1; else if (t >= f.t0 && f.t1 > f.t0) { Lx = f.L0 + (f.L1 - f.L0) * (t - f.t0) / (f.t1 - f.t0); break; } else break;
+    }
+    return Lx;
+  }
+  phaseAt(t) {
+    const act = this.phases.filter(f => f.t1 > f.t0);
+    for (const f of act) if (t < f.t1) return f;
+    return act[act.length - 1] || null;
+  }
+  // ponto que está sendo desenhado/pintado no instante t (coordenadas da imagem), sem estado
+  penAt(t) {
+    const A = this.A, f = this.phaseAt(t); if (!f) return null;
+    if (f.type === 'line') { const S = A.strokes; return S.pts.length ? strokeAt(S.pts, S.cum, this.lineLenAt(t)) : null; }
+    const R = A.regions; if (f.k1 <= f.k0) return null;
+    let k = f.k0; while (k < f.k1 - 1 && t >= this.regT[k][1]) k++;
+    const [a, b, from] = this.regTravel[k], [s, e] = this.regT[k];
+    if (t < b) {
+      const to = this.regEnds[k][0], u = b > a ? clamp((t - a) / (b - a), 0, 1) : 1, q = u < 0.5 ? 2 * u * u : 1 - Math.pow(-2 * u + 2, 2) / 2;
+      return [from[0] + (to[0] - from[0]) * q, from[1] + (to[1] - from[1]) * q];
+    }
+    const r = R[k], q = polyAt(r.path, r.cum, r.len * clamp((t - s) / (e - s), 0, 1));
+    return [r.x + q[0], r.y + q[1]];
+  }
+  // média centrada (janela triangular) do ponto de desenho: tira o tremor sem atrasar a ponta.
+  // amostras longe demais do ponto atual (saltos entre objetos) ficam de fora, para a mão não parar no vazio.
+  smoothPen(t) {
+    const t0 = this.tLine0, t1 = Math.max(t0, this.tFade0 - 1e-6);
+    const f = this.phaseAt(t), W = f && f.type === 'line' ? TUNE.winLine : TUNE.winPaint;
+    const p0 = this.penAt(clamp(t, t0, t1)); if (!p0) return null;
+    const maxD = Math.hypot(this.A.w, this.A.h) * TUNE.maxJump;
+    const n = 6; let sx = 0, sy = 0, sw = 0;
+    for (let i = -n; i <= n; i++) {
+      const tt = clamp(t + W * i / n, t0, t1), p = i ? this.penAt(tt) : p0; if (!p) continue;
+      if (f && f.type === 'line' && Math.hypot(p[0] - p0[0], p[1] - p0[1]) > maxD) continue;
+      const wgt = n + 1 - Math.abs(i); sx += p[0] * wgt; sy += p[1] * wgt; sw += wgt;
+    }
+    return [sx / sw, sy / sw];
+  }
+  drawHand(t) {
+    const { L, ctx, A } = this;
+    const off = [L.W * 0.8, L.H * 1.03];
+    const first = A.strokes.pts.length ? [A.strokes.pts[0], A.strokes.pts[1]] : (A.regions.length ? [A.regions[0].x + A.regions[0].path[0], A.regions[0].y + A.regions[0].path[1]] : [L.w / 2, L.h / 2]);
+    let p;
+    if (t < this.tLine0) {
+      const u = clamp(t / this.tLine0, 0, 1), e = 1 - Math.pow(1 - u, 3);
+      const f0 = this.smoothPen(this.tLine0) || first;
+      p = [off[0] + (L.ox + f0[0] - off[0]) * e, off[1] + (L.oy + f0[1] - off[1]) * e];
+      this.hand = p.slice();
+    } else if (t >= this.tFade0) {
+      if (!this.handLast) this.handLast = (this.hand || [L.ox + first[0], L.oy + first[1]]).slice();
+      const u = clamp((t - this.tFade0) / this.exit, 0, 1), e = u * u * u;
+      p = [this.handLast[0] + (off[0] - this.handLast[0]) * e, this.handLast[1] + (off[1] - this.handLast[1]) * e];
+      if (u >= 1) return;
+    } else {
+      const sp = this.smoothPen(t);
+      this.hand = sp ? [L.ox + sp[0], L.oy + sp[1]] : (this.hand || [L.ox + first[0], L.oy + first[1]]);
+      this.handLast = null;
+      p = this.hand;
+    }
+    this.handT = t;
+    const s = this.handScale;
+    ctx.drawImage(HAND, p[0] - HAND_TIP[0] * s, p[1] - HAND_TIP[1] * s, HAND.naturalWidth * s, HAND.naturalHeight * s);
+  }
+}
+
+function strokeAt(P, C, L) {
+  let lo = 0, hi = C.length - 1;
+  if (hi < 0) return null;
+  while (lo < hi) { const mid = (lo + hi + 1) >> 1; if (C[mid] <= L) lo = mid; else hi = mid - 1; }
+  const i = lo;
+  if (i + 1 >= C.length || C[i + 1] === C[i]) return [P[3*i], P[3*i+1]];
+  const u = clamp((L - C[i]) / (C[i + 1] - C[i]), 0, 1);
+  return [P[3*i] + (P[3*i+3] - P[3*i]) * u, P[3*i+1] + (P[3*i+4] - P[3*i+1]) * u];
+}
+function polyAt(P, C, L) {
+  const n = C.length; if (n < 2) return [P[0], P[1]];
+  let k = 0; while (k < n - 2 && C[k + 1] < L) k++;
+  const seg = C[k + 1] - C[k] || 1, u = clamp((L - C[k]) / seg, 0, 1);
+  return [P[2*k] + (P[2*k+2] - P[2*k]) * u, P[2*k+1] + (P[2*k+3] - P[2*k+1]) * u];
+}
+function strokePolyline(ctx, P, C, from, to) {
+  if (to <= from) return;
+  const n = C.length; if (n < 2) { ctx.beginPath(); ctx.arc(P[0], P[1], ctx.lineWidth / 2, 0, Math.PI * 2); ctx.fill(); return; }
+  const at = L => { let k = 0; while (k < n - 2 && C[k + 1] < L) k++; const seg = C[k + 1] - C[k] || 1, u = clamp((L - C[k]) / seg, 0, 1);
+    return [P[2*k] + (P[2*k+2] - P[2*k]) * u, P[2*k+1] + (P[2*k+3] - P[2*k+1]) * u, k]; };
+  const a = at(from), b = at(to);
+  ctx.beginPath(); ctx.moveTo(a[0], a[1]);
+  for (let k = a[2] + 1; k <= b[2]; k++) ctx.lineTo(P[2*k], P[2*k+1]);
+  ctx.lineTo(b[0] + 0.01, b[1]); ctx.stroke();
+}
+
+/* ================= estado da página ================= */
+const S = { img: null, name: 'pato-exemplo', A: null, L: null, orig: null, anim: null, playing: false, detect: false, busy: false, blob: null, ext: 'mp4' };
+const view = $('view'), vctx = view.getContext('2d');
+
+function readOpts() {
+  return {
+    format: $('format').value, order: $('order').value,
+    lineDur: +$('lineDur').value, fillDur: +$('fillDur').value, hold: +$('hold').value,
+    thr: +$('thr').value, tol: +$('tol').value, doFill: $('doFill').checked,
+    textLast: $('textLast').checked, showHand: $('showHand').checked, handSize: +$('handSize').value / 100,
+  };
+}
+function setStatus(msg, kind) { const s = $('status'); s.textContent = msg; s.className = 'status' + (kind ? ' ' + kind : ''); }
+
+async function rebuild() {
+  if (!S.img) return;
+  stopPlay();
+  const opt = readOpts();
+  setStatus('Analisando o desenho…'); await nextTick();
+  const t0 = performance.now();
+  const L = computeLayout(S.img.naturalWidth || S.img.width, S.img.naturalHeight || S.img.height, opt.format);
+  const orig = mkCanvas(L.w, L.h), oc = orig.getContext('2d', { willReadFrequently: true });
+  oc.fillStyle = '#fff'; oc.fillRect(0, 0, L.w, L.h);
+  oc.imageSmoothingQuality = 'high'; oc.drawImage(S.img, 0, 0, L.w, L.h);
+  opt.ocrWords = null;
+  if (opt.textLast && opt.order !== 'text') {
+    setStatus('Lendo os textos da imagem…'); await nextTick();
+    opt.ocrWords = await readWords(orig, (S.img.src || '') + '|' + L.w + 'x' + L.h);
+    setStatus('Analisando o desenho…'); await nextTick();
+  }
+  OCR.lastCount = opt.ocrWords ? opt.ocrWords.length : null;
+  S.lastWords = opt.ocrWords || [];
+  const A = analyze(orig, opt);
+  S.A = A; S.L = L; S.orig = orig;
+  applyAutoDur();
+  S.anim = new Animator(A, L, orig, readOpts());
+  view.width = L.W; view.height = L.H;
+  showStats(performance.now() - t0);
+  drawStill();
+  setStatus('');
+  S.builtFor = S.name;
+}
+
+function retime() { if (!S.anim) return; stopPlay(); applyAutoDur(); S.anim.setTiming(readOpts()); showStats(); drawStill(); }
+
+// tempos automáticos: ~3300 px de traço por segundo e ~7 áreas de pintura (relevantes) por segundo,
+// para a mão acompanhar com calma; nunca abaixo de 6 s (contorno) e 4 s (pintura)
+function autoDurations(A) {
+  const line = clamp(Math.ceil(A.strokes.total / 3300 * 2) / 2, 6, 30);
+  const pathLen = A.regions.reduce((a, r) => a + r.len, 0);
+  const fill = clamp(Math.ceil(pathLen / 4500 * 2) / 2, 4, 30);
+  return { line, fill };
+}
+function applyAutoDur() {
+  const on = $('autoDur').checked;
+  $('lineDur').disabled = on || S.busy; $('fillDur').disabled = on || S.busy;
+  if (!on || !S.A) return;
+  const a = autoDurations(S.A);
+  $('lineDur').value = a.line; $('fillDur').value = a.fill;
+  $('lineDur').dispatchEvent(new Event('input')); $('fillDur').dispatchEvent(new Event('input'));
+}
+
+function showStats(ms) {
+  const A = S.A, an = S.anim, st = $('stats');
+  const chips = [
+    `<span class="chip"><b>${A.strokes.count}</b> traços</span>`,
+    `<span class="chip"><b>${A.regions.length}</b> áreas de pintura</span>`,
+    ...(A.nTextComps ? [`<span class="chip"><b>${A.nTextComps}</b> letras/números (no final)</span>`] : []),
+    ...(OCR.lastCount !== null ? [`<span class="chip">leitura de texto: <b>${OCR.lastCount}</b> palavra${OCR.lastCount === 1 ? '' : 's'}</span>`] : (OCR.failed && $('textLast').checked ? ['<span class="chip warn">Leitura de texto indisponível neste navegador: usando a detecção por formato</span>'] : [])),
+    `<span class="chip">vídeo de <b>${an.total.toFixed(1)} s</b> · ${S.L.W}×${S.L.H}</span>`,
+  ];
+  if (A.bgLum < 120) chips.push('<span class="chip warn">Fundo escuro: o resultado pode sair errado</span>');
+  if (A.strokes.total === 0) chips.push('<span class="chip warn">Nenhum contorno detectado: aumente "O que conta como contorno"</span>');
+  st.innerHTML = chips.join('');
+}
+
+function drawStill() {
+  if (S.detect) return drawDetection();
+  const c = S.anim.render(S.anim.total);
+  vctx.drawImage(c, 0, 0);
+}
+
+function drawDetection() {
+  const { A, L } = S;
+  const img = new ImageData(A.w, A.h), D = img.data;
+  const palette = [[255, 205, 60], [120, 190, 255], [255, 140, 120], [140, 220, 150], [200, 160, 255], [255, 170, 210]];
+  for (let i = 0; i < A.w * A.h; i++) { D[4*i] = 255; D[4*i+1] = 255; D[4*i+2] = 255; D[4*i+3] = 255; }
+  A.regions.forEach((r, k) => {
+    const c = palette[k % palette.length], rd = r.layer.getContext('2d').getImageData(0, 0, r.bw, r.bh).data;
+    for (let y = 0; y < r.bh; y++) for (let x = 0; x < r.bw; x++) if (rd[4*(y*r.bw+x)+3]) {
+      const o = 4 * ((r.y + y) * A.w + r.x + x); D[o] = c[0]; D[o+1] = c[1]; D[o+2] = c[2];
+    }
+  });
+  for (let i = 0; i < A.w * A.h; i++) if (A.line[i]) { D[4*i] = 20; D[4*i+1] = 30; D[4*i+2] = 60; }
+  const tmp = mkCanvas(A.w, A.h); tmp.getContext('2d').putImageData(img, 0, 0);
+  vctx.fillStyle = '#fff'; vctx.fillRect(0, 0, L.W, L.H); vctx.drawImage(tmp, L.ox, L.oy);
+  const words = S.lastWords || [];
+  vctx.strokeStyle = '#d6336c'; vctx.lineWidth = Math.max(2, L.H / 400); vctx.setLineDash([8, 6]);
+  const freeSet = new Set((S.freeWords || []).map(wd => wd.join('|')));
+  for (const wd of words) { vctx.strokeStyle = freeSet.has(wd.join('|')) ? '#d6336c' : '#8a8f99'; vctx.strokeRect(L.ox + wd[0], L.oy + wd[1], wd[2] - wd[0], wd[3] - wd[1]); }
+  vctx.setLineDash([]);
+  vctx.fillStyle = 'rgba(20,30,60,.85)'; vctx.font = `600 ${Math.round(L.H / 34)}px "IBM Plex Sans", sans-serif`;
+  vctx.fillText('Azul-escuro = contorno · cores = pintura · tracejado rosa = texto solto (fica no fim) · cinza = texto da paisagem', Math.round(L.W * 0.03), Math.round(L.H * 0.06));
+}
+
+let raf = 0;
+function play() {
+  if (!S.anim || S.busy) return;
+  if (S.detect) toggleDetect(false);
+  stopPlay(); S.playing = true; $('play').textContent = '■ Parar';
+  S.anim.reset();
+  const t0 = performance.now();
+  const loop = now => {
+    const t = (now - t0) / 1000;
+    vctx.drawImage(S.anim.render(Math.min(t, S.anim.total)), 0, 0);
+    if (t < S.anim.total && S.playing) raf = requestAnimationFrame(loop); else stopPlay();
+  };
+  raf = requestAnimationFrame(loop);
+}
+function stopPlay() { cancelAnimationFrame(raf); S.playing = false; $('play').textContent = '▶ Reproduzir prévia'; }
+
+function toggleDetect(force) {
+  S.detect = typeof force === 'boolean' ? force : !S.detect;
+  $('detect').setAttribute('aria-pressed', String(S.detect));
+  $('detect').textContent = S.detect ? 'Ver resultado' : 'Ver detecção';
+  if (S.anim) { stopPlay(); drawStill(); }
+}
+
+/* ================= exportação ================= */
+async function pickCodec(W, H, fps) {
+  if (!('VideoEncoder' in window) || !window.Mp4Muxer) return null;
+  const bitrate = Math.round(W * H * fps * 0.12);
+  for (const codec of ['avc1.640028', 'avc1.640032', 'avc1.640033', 'avc1.4d0032', 'avc1.42e032', 'avc1.42001f']) {
+    try {
+      const cfg = { codec, width: W, height: H, bitrate, framerate: fps, avc: { format: 'avc' } };
+      const r = await VideoEncoder.isConfigSupported(cfg);
+      if (r.supported) return cfg;
+    } catch (e) { /* tenta o próximo */ }
+  }
+  return null;
+}
+
+async function exportVideo() {
+  if (!S.anim || S.busy) return;
+  stopPlay(); if (S.detect) toggleDetect(false);
+  S.busy = true; setBusy(true);
+  const fps = 30, { W, H } = S.L, an = S.anim;
+  const frames = Math.ceil(an.total * fps);
+  const prog = $('prog'); prog.hidden = false; prog.value = 0;
+  try {
+    const cfg = await pickCodec(W, H, fps);
+    let blob;
+    if (cfg) {
+      setStatus('Gerando MP4…');
+      const muxer = new Mp4Muxer.Muxer({ target: new Mp4Muxer.ArrayBufferTarget(), video: { codec: 'avc', width: W, height: H, frameRate: fps }, fastStart: 'in-memory' });
+      let encErr = null;
+      const enc = new VideoEncoder({ output: (chunk, meta) => muxer.addVideoChunk(chunk, meta), error: e => { encErr = e; } });
+      enc.configure(cfg);
+      an.reset();
+      for (let f = 0; f < frames; f++) {
+        if (encErr) throw encErr;
+        const c = an.render(f / fps);
+        const vf = new VideoFrame(c, { timestamp: Math.round(f * 1e6 / fps), duration: Math.round(1e6 / fps) });
+        enc.encode(vf, { keyFrame: f % (fps * 2) === 0 }); vf.close();
+        while (enc.encodeQueueSize > 6) await new Promise(r => setTimeout(r, 4));
+        if (f % 6 === 0) { prog.value = f / frames; vctx.drawImage(c, 0, 0); await nextTick(); }
+      }
+      await enc.flush(); enc.close();
+      if (encErr) throw encErr;
+      muxer.finalize();
+      blob = new Blob([muxer.target.buffer], { type: 'video/mp4' }); S.ext = 'mp4';
+    } else {
+      blob = await recordRealtime(fps, prog);
+    }
+    S.blob = blob;
+    const v = $('outVideo'); if (v.src) URL.revokeObjectURL(v.src); v.src = URL.createObjectURL(blob);
+    $('result').classList.add('show');
+    setStatus(`Pronto: ${(blob.size / 1048576).toFixed(1)} MB em ${S.ext.toUpperCase()}. Confira abaixo e clique em "Salvar vídeo".`, 'ok');
+    drawStill();
+  } catch (e) {
+    console.error(e);
+    setStatus('Não foi possível gerar o vídeo neste navegador (' + (e && e.message ? e.message : e) + '). Tente no Chrome ou Edge atualizados.', 'err');
+  } finally {
+    prog.hidden = true; S.busy = false; setBusy(false);
+  }
+}
+
+// alternativa para navegadores sem WebCodecs: grava em tempo real
+function recordRealtime(fps, prog) {
+  return new Promise((resolve, reject) => {
+    const an = S.anim, c = an.canvas;
+    const types = ['video/mp4;codecs=avc1', 'video/webm;codecs=vp9', 'video/webm'];
+    const type = types.find(t => window.MediaRecorder && MediaRecorder.isTypeSupported(t));
+    if (!type || !c.captureStream) return reject(new Error('sem suporte a gravação de vídeo'));
+    S.ext = type.startsWith('video/mp4') ? 'mp4' : 'webm';
+    setStatus(`Gravando em tempo real (${S.ext.toUpperCase()})… mantenha esta aba aberta.`);
+    const rec = new MediaRecorder(c.captureStream(fps), { mimeType: type, videoBitsPerSecond: 8e6 });
+    const parts = []; rec.ondataavailable = e => e.data.size && parts.push(e.data);
+    rec.onstop = () => resolve(new Blob(parts, { type: type.split(';')[0] }));
+    an.reset(); an.render(0); rec.start();
+    const t0 = performance.now();
+    const loop = now => { const t = (now - t0) / 1000; vctx.drawImage(an.render(Math.min(t, an.total)), 0, 0); prog.value = t / an.total;
+      if (t < an.total) requestAnimationFrame(loop); else setTimeout(() => rec.stop(), 200); };
+    requestAnimationFrame(loop);
+  });
+}
+
+async function saveVideo() {
+  if (!S.blob) return;
+  const base = (S.name || 'desenho').replace(/\.[a-z0-9]+$/i, '').replace(/[^\w\-]+/g, '-').slice(0, 60) || 'desenho';
+  const filename = `${base}-traco-a-traco.${S.ext}`;
+  const ss = $('saveStatus'); ss.className = 'status'; ss.textContent = '';
+  let dl = null;
+  try { if (window.claude && typeof window.claude.use === 'function') dl = await window.claude.use('downloads'); } catch (e) { dl = null; }
+  if (dl) {
+    try { await dl.save({ filename, data: S.blob }); ss.textContent = 'Vídeo salvo.'; ss.className = 'status ok'; }
+    catch (e) {
+      const code = e && e.code;
+      ss.className = 'status err';
+      ss.textContent = code === 'declined' ? 'Download cancelado. Clique de novo quando quiser salvar.'
+        : code === 'rate_limited' ? 'Já há um pedido de download aberto. Aguarde e tente de novo.'
+        : 'Este visualizador não permite salvar o arquivo. Abra a página no claude.ai e tente de novo.';
+    }
+    return;
+  }
+  const a = document.createElement('a'); a.href = URL.createObjectURL(S.blob); a.download = filename;
+  document.body.appendChild(a); a.click(); a.remove();
+  ss.textContent = 'Download iniciado.'; ss.className = 'status ok';
+}
+
+function setBusy(b) { ['play', 'detect', 'export', 'format', 'order', 'thr', 'tol', 'doFill', 'textLast', 'autoDur', 'lineDur', 'fillDur', 'hold', 'showHand', 'handSize'].forEach(id => $(id).disabled = b); if (!b) applyAutoDur(); }
+
+/* ================= entrada de arquivo ================= */
+function loadFromSrc(src, name) {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => { S.img = img; S.name = name; resolve(); };
+    img.onerror = () => reject(new Error('imagem inválida'));
+    img.src = src;
+  });
+}
+async function handleFile(f) {
+  if (!f || !f.type.startsWith('image/')) { setStatus('Esse arquivo não é uma imagem. Use PNG, JPG ou WebP.', 'err'); return; }
+  const url = URL.createObjectURL(f);
+  try { await loadFromSrc(url, f.name); $('fname').textContent = f.name; $('result').classList.remove('show'); await rebuild(); play(); }
+  catch (e) { setStatus('Não consegui abrir essa imagem. Tente exportá-la de novo como PNG.', 'err'); }
+}
+const drop = $('drop'), fileIn = $('file');
+drop.addEventListener('click', () => fileIn.click());
+drop.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); fileIn.click(); } });
+fileIn.addEventListener('change', () => handleFile(fileIn.files[0]));
+['dragenter', 'dragover'].forEach(ev => drop.addEventListener(ev, e => { e.preventDefault(); drop.classList.add('over'); }));
+['dragleave', 'drop'].forEach(ev => drop.addEventListener(ev, e => { e.preventDefault(); drop.classList.remove('over'); }));
+drop.addEventListener('drop', e => handleFile(e.dataTransfer.files[0]));
+document.addEventListener('dragover', e => e.preventDefault());
+document.addEventListener('drop', e => { e.preventDefault(); if (e.target !== drop && !drop.contains(e.target)) handleFile(e.dataTransfer.files[0]); });
+
+/* ================= controles ================= */
+const bindOut = (id, fmt) => { const el = $(id), o = $(id + 'O'); const f = () => o.textContent = fmt(el.value); el.addEventListener('input', f); f(); };
+bindOut('lineDur', v => `${v} s`); bindOut('fillDur', v => `${v} s`); bindOut('hold', v => `${v} s`);
+bindOut('thr', v => v); bindOut('handSize', v => `${v}%`); bindOut('tol', v => v);
+['lineDur', 'fillDur', 'hold', 'showHand', 'handSize', 'autoDur'].forEach(id => $(id).addEventListener('change', retime));
+['format', 'order', 'thr', 'tol', 'doFill', 'textLast'].forEach(id => $(id).addEventListener('change', rebuild));
+$('play').addEventListener('click', () => S.playing ? stopPlay() : play());
+$('detect').addEventListener('click', () => toggleDetect());
+$('export').addEventListener('click', exportVideo);
+$('save').addEventListener('click', saveVideo);
+
+/* ================= início ================= */
+(async () => {
+  getOcr();
+  await handReady;
+  await loadFromSrc('data:image/svg+xml;charset=utf-8,' + encodeURIComponent(SAMPLE_SVG), 'pato-exemplo');
+  await rebuild();
+  play();
+})();
+</script>
+</body>
+</html>
