@@ -136,7 +136,7 @@ progress{width:220px;height:10px;accent-color:var(--accent)}
           <option value="1" selected>Média</option>
           <option value="2">Alta (menos ruído)</option>
         </select>
-        <small>Mesma limpeza da Limpa Pintura (modo Suave). O PNG limpo é baixado junto com o vídeo.</small>
+        <small>Mesma limpeza da Limpa Pintura (modo Suave).</small>
       </div>
       <label class="check"><input type="checkbox" autocomplete="off" id="textLast" checked> Letras e números por último</label>
       <label class="check"><input type="checkbox" autocomplete="off" id="autoDur" checked> Tempos automáticos pelo nível de detalhe</label>
@@ -1824,7 +1824,6 @@ async function runBatch(files) {
       const blob = await exportVideo();
       if (!blob) throw new Error('vídeo vazio');
       const how = await autoSave(blob, videoName(f.name, S.ext));
-      if (S.cleanBlob) await autoSave(S.cleanBlob, cleanName(f.name));
       ok++; mark(k, 'ok', `${how} · ${(blob.size / 1048576).toFixed(1)} MB · ${Math.round((performance.now() - t0) / 1000)} s`);
     } catch (e) {
       mark(k, 'err', S.cancel ? 'cancelado' : (e && e.code === 'declined' ? 'download recusado' : 'erro: ' + (e && e.message ? e.message : e)));
@@ -1844,7 +1843,7 @@ async function saveVideo() {
   let dl = null;
   try { if (window.claude && typeof window.claude.use === 'function') dl = await window.claude.use('downloads'); } catch (e) { dl = null; }
   if (dl) {
-    try { await dl.save({ filename, data: S.blob }); if (S.cleanBlob) await dl.save({ filename: cleanName(S.name), data: S.cleanBlob }); ss.textContent = S.cleanBlob ? 'Vídeo e PNG limpo salvos.' : 'Vídeo salvo.'; ss.className = 'status ok'; }
+    try { await dl.save({ filename, data: S.blob }); ss.textContent = 'Vídeo salvo.'; ss.className = 'status ok'; }
     catch (e) {
       const code = e && e.code;
       ss.className = 'status err';
@@ -1856,7 +1855,6 @@ async function saveVideo() {
   }
   const a = document.createElement('a'); a.href = URL.createObjectURL(S.blob); a.download = filename;
   document.body.appendChild(a); a.click(); a.remove();
-  if (S.cleanBlob) await autoSave(S.cleanBlob, cleanName(S.name));
   ss.textContent = 'Download iniciado.'; ss.className = 'status ok';
 }
 
