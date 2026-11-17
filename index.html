@@ -128,6 +128,16 @@ progress{width:220px;height:10px;accent-color:var(--accent)}
           <option value="text">Só texto e números (linha por linha)</option>
         </select>
       </div>
+      <label class="check"><input type="checkbox" autocomplete="off" id="cleanFirst" checked> Limpar a pintura antes de animar</label>
+      <div class="field">
+        <label for="cleanLevel">Limpeza</label>
+        <select autocomplete="off" id="cleanLevel">
+          <option value="0">Leve (mais detalhe)</option>
+          <option value="1" selected>Média</option>
+          <option value="2">Alta (menos ruído)</option>
+        </select>
+        <small>Mesma limpeza da Limpa Pintura (modo Suave). O PNG limpo é baixado junto com o vídeo.</small>
+      </div>
       <label class="check"><input type="checkbox" autocomplete="off" id="textLast" checked> Letras e números por último</label>
       <label class="check"><input type="checkbox" autocomplete="off" id="autoDur" checked> Tempos automáticos pelo nível de detalhe</label>
       <div class="field">
@@ -195,6 +205,7 @@ progress{width:220px;height:10px;accent-color:var(--accent)}
 
 <script src="https://cdn.jsdelivr.net/npm/mp4-muxer@5.2.1/build/mp4-muxer.js"></script>
 <script src="ocr/ort.wasm.min.js"></script>
+<script src="retouch.js"></script>
 <script>
 "use strict";
 /* ================= imagem de exemplo ================= */
@@ -1807,11 +1818,13 @@ async function runBatch(files) {
     const url = URL.createObjectURL(f);
     try {
       await loadFromSrc(url, f.name); $('fname').textContent = f.name;
+      if ($('cleanFirst').checked) { mark(k, 'now', 'limpando a pintura…'); await maybeClean(); mark(k, 'now', 'analisando…'); }
       await rebuild();
       mark(k, 'now', 'gerando vídeo…');
       const blob = await exportVideo();
       if (!blob) throw new Error('vídeo vazio');
       const how = await autoSave(blob, videoName(f.name, S.ext));
+      if (S.cleanBlob) await autoSave(S.cleanBlob, cleanName(f.name));
       ok++; mark(k, 'ok', `${how} · ${(blob.size / 1048576).toFixed(1)} MB · ${Math.round((performance.now() - t0) / 1000)} s`);
     } catch (e) {
       mark(k, 'err', S.cancel ? 'cancelado' : (e && e.code === 'declined' ? 'download recusado' : 'erro: ' + (e && e.message ? e.message : e)));
@@ -1831,7 +1844,7 @@ async function saveVideo() {
   let dl = null;
   try { if (window.claude && typeof window.claude.use === 'function') dl = await window.claude.use('downloads'); } catch (e) { dl = null; }
   if (dl) {
-    try { await dl.save({ filename, data: S.blob }); ss.textContent = 'Vídeo salvo.'; ss.className = 'status ok'; }
+    try { await dl.save({ filename, data: S.blob }); if (S.cleanBlob) await dl.save({ filename: cleanName(S.name), data: S.cleanBlob }); ss.textContent = S.cleanBlob ? 'Vídeo e PNG limpo salvos.' : 'Vídeo salvo.'; ss.className = 'status ok'; }
     catch (e) {
       const code = e && e.code;
       ss.className = 'status err';
@@ -1843,16 +1856,44 @@ async function saveVideo() {
   }
   const a = document.createElement('a'); a.href = URL.createObjectURL(S.blob); a.download = filename;
   document.body.appendChild(a); a.click(); a.remove();
+  if (S.cleanBlob) await autoSave(S.cleanBlob, cleanName(S.name));
   ss.textContent = 'Download iniciado.'; ss.className = 'status ok';
 }
 
-function setBusy(b) { ['play', 'detect', 'export', 'format', 'order', 'thr', 'tol', 'doFill', 'textLast', 'autoDur', 'lineDur', 'fillDur', 'hold', 'showHand', 'handSize'].forEach(id => $(id).disabled = b); if (!b) applyAutoDur(); }
+function setBusy(b) { ['play', 'detect', 'export', 'format', 'order', 'cleanFirst', 'cleanLevel', 'thr', 'tol', 'doFill', 'textLast', 'autoDur', 'lineDur', 'fillDur', 'hold', 'showHand', 'handSize'].forEach(id => $(id).disabled = b); if (!b) applyAutoDur(); }
+
+/* ================= limpeza da pintura (retouch.js do limpa-pato, domínio público) ================= */
+function retouchRun(input, value, paper) {
+  const local = () => removeSpecks(input, value, paper);
+  return new Promise((res, rej) => {
+    if (location.protocol === 'file:' || typeof Worker === 'undefined') { try { res(local()); } catch (e) { rej(e); } return; }
+    let wk; try { wk = new Worker('retouch-worker.js'); } catch (e) { try { res(local()); } catch (e2) { rej(e2); } return; }
+    wk.onmessage = e => { wk.terminate(); res(e.data); };
+    wk.onerror = ev => { ev.preventDefault && ev.preventDefault(); wk.terminate(); try { res(local()); } catch (e2) { rej(e2); } };
+    wk.postMessage({ input, value, paper }, [input.data.buffer]);
+  });
+}
+// usa S.origImg (imagem enviada); se a opção estiver marcada, troca S.img pela versão limpa e guarda o PNG em S.cleanBlob
+async function maybeClean() {
+  S.cleanBlob = null; const img = S.origImg; if (!img) return;
+  if (!$('cleanFirst').checked) { S.img = img; return; }
+  setStatus('Limpando a pintura…'); await nextTick();
+  const W0 = img.naturalWidth, H0 = img.naturalHeight, k = Math.min(1, Math.sqrt(8000000 / (W0 * H0)), 8192 / Math.max(W0, H0));
+  const w = Math.max(1, Math.round(W0 * k)), h = Math.max(1, Math.round(H0 * k));
+  const c = document.createElement('canvas'); c.width = w; c.height = h; const ctx = c.getContext('2d', { willReadFrequently: true }); ctx.drawImage(img, 0, 0, w, h);
+  const bytes = await retouchRun(ctx.getImageData(0, 0, w, h), +$('cleanLevel').value, true);
+  ctx.putImageData(new ImageData(bytes, w, h), 0, 0);
+  S.cleanBlob = await new Promise(r => c.toBlob(r, 'image/png'));
+  const url = URL.createObjectURL(S.cleanBlob);
+  S.img = await new Promise((res, rej) => { const im = new Image(); im.onload = () => res(im); im.onerror = () => rej(new Error('limpeza falhou')); im.src = url; });
+}
+function cleanName(name) { return videoName(name, 'png').replace(/-traco-a-traco\.png$/, '-limpo.png'); }
 
 /* ================= entrada de arquivo ================= */
 function loadFromSrc(src, name) {
   return new Promise((resolve, reject) => {
     const img = new Image();
-    img.onload = () => { S.img = img; S.name = name; resolve(); };
+    img.onload = () => { S.img = img; S.origImg = img; S.cleanBlob = null; S.name = name; resolve(); };
     img.onerror = () => reject(new Error('imagem inválida'));
     img.src = src;
   });
@@ -1860,9 +1901,13 @@ function loadFromSrc(src, name) {
 async function handleFile(f) {
   if (!f || !f.type.startsWith('image/')) { setStatus('Esse arquivo não é uma imagem. Use PNG, JPG ou WebP.', 'err'); return; }
   const url = URL.createObjectURL(f);
-  try { await loadFromSrc(url, f.name); $('fname').textContent = f.name; $('result').classList.remove('show'); await rebuild(); play(); }
+  try { await loadFromSrc(url, f.name); $('fname').textContent = f.name; $('result').classList.remove('show'); await maybeClean(); await rebuild(); play(); }
   catch (e) { setStatus('Não consegui abrir essa imagem. Tente exportá-la de novo como PNG.', 'err'); }
 }
+['cleanFirst', 'cleanLevel'].forEach(id => $(id).addEventListener('change', async () => {
+  if (!S.origImg || S.busy || S.name === 'pato-exemplo') return;
+  try { stopPlay(); $('result').classList.remove('show'); await maybeClean(); await rebuild(); play(); } catch (e) { setStatus('Não consegui limpar essa imagem.', 'err'); }
+}));
 const pickFiles = list => { const fs = [...(list || [])]; if (fs.length > 1) runBatch(fs); else handleFile(fs[0]); };
 const drop = $('drop'), fileIn = $('file');
 drop.addEventListener('click', () => fileIn.click());
